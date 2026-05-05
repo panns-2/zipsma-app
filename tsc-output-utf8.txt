@@ -1,0 +1,55 @@
+﻿src/app/admin/dashboard/page.tsx(772,25): error TS2322: Type 'string | number' is not assignable to type 'string'.
+  Type 'number' is not assignable to type 'string'.
+src/app/admin/dashboard/page.tsx(994,59): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/app/admin/dashboard/page.tsx(1011,87): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/app/admin/dashboard/page.tsx(1297,28): error TS2304: Cannot find name 'communicationForm'.
+src/app/admin/dashboard/page.tsx(1298,26): error TS2304: Cannot find name 'communicationForm'.
+src/app/admin/dashboard/page.tsx(1299,26): error TS2304: Cannot find name 'communicationForm'.
+src/app/admin/dashboard/page.tsx(1316,13): error TS2304: Cannot find name 'communicationForm'.
+src/app/admin/dashboard/page.tsx(1325,34): error TS2304: Cannot find name 'communicationForm'.
+src/app/admin/dashboard/page.tsx(1327,36): error TS2304: Cannot find name 'communicationForm'.
+src/app/admin/dashboard/page.tsx(1328,41): error TS2304: Cannot find name 'communicationForm'.
+src/app/admin/dashboard/page.tsx(1328,81): error TS2304: Cannot find name 'communicationForm'.
+src/app/admin/dashboard/page.tsx(1360,33): error TS2304: Cannot find name 'communicationForm'.
+src/app/admin/dashboard/page.tsx(1361,14): error TS2552: Cannot find name 'setCommunicationForm'. Did you mean 'defaultCommunicationForm'?
+src/app/admin/dashboard/page.tsx(1373,56): error TS2304: Cannot find name 'calendarEventForm'.
+src/app/admin/dashboard/page.tsx(1375,13): error TS2304: Cannot find name 'setCalendarEventForm'.
+src/app/admin/dashboard/page.tsx(1644,25): error TS2353: Object literal may only specify known properties, and 'categoryId' does not exist in type '{ studentName: string; className: string; categoryName: string; daysPresent: number; dailyRate: number; totalBilled: number; totalPaid: number; balance: number; status: "Paid" | "Partially Paid" | "Unpaid"; }'.
+src/app/admin/dashboard/page.tsx(2554,99): error TS2339: Property 'studentId' does not exist on type '{ studentName: string; className: string; categoryName: string; daysPresent: number; dailyRate: number; totalBilled: number; totalPaid: number; balance: number; status: "Paid" | "Partially Paid" | "Unpaid"; }'.
+src/app/admin/dashboard/page.tsx(2554,116): error TS2339: Property 'categoryId' does not exist on type '{ studentName: string; className: string; categoryName: string; daysPresent: number; dailyRate: number; totalBilled: number; totalPaid: number; balance: number; status: "Paid" | "Partially Paid" | "Unpaid"; }'.
+src/app/admin/dashboard/page.tsx(2563,138): error TS2339: Property 'studentId' does not exist on type '{ studentName: string; className: string; categoryName: string; daysPresent: number; dailyRate: number; totalBilled: number; totalPaid: number; balance: number; status: "Paid" | "Partially Paid" | "Unpaid"; }'.
+src/app/admin/dashboard/page.tsx(2563,153): error TS2339: Property 'categoryId' does not exist on type '{ studentName: string; className: string; categoryName: string; daysPresent: number; dailyRate: number; totalBilled: number; totalPaid: number; balance: number; status: "Paid" | "Partially Paid" | "Unpaid"; }'.
+src/app/admin/dashboard/page.tsx(2571,126): error TS2339: Property 'studentId' does not exist on type '{ studentName: string; className: string; categoryName: string; daysPresent: number; dailyRate: number; totalBilled: number; totalPaid: number; balance: number; status: "Paid" | "Partially Paid" | "Unpaid"; }'.
+src/app/admin/dashboard/page.tsx(2571,141): error TS2339: Property 'categoryId' does not exist on type '{ studentName: string; className: string; categoryName: string; daysPresent: number; dailyRate: number; totalBilled: number; totalPaid: number; balance: number; status: "Paid" | "Partially Paid" | "Unpaid"; }'.
+src/app/admin/dashboard/page.tsx(2585,138): error TS2339: Property 'studentId' does not exist on type '{ studentName: string; className: string; categoryName: string; daysPresent: number; dailyRate: number; totalBilled: number; totalPaid: number; balance: number; status: "Paid" | "Partially Paid" | "Unpaid"; }'.
+src/app/admin/dashboard/page.tsx(2585,153): error TS2339: Property 'categoryId' does not exist on type '{ studentName: string; className: string; categoryName: string; daysPresent: number; dailyRate: number; totalBilled: number; totalPaid: number; balance: number; status: "Paid" | "Partially Paid" | "Unpaid"; }'.
+src/app/admin/dashboard/page.tsx(2596,113): error TS2339: Property 'studentId' does not exist on type '{ studentName: string; className: string; categoryName: string; daysPresent: number; dailyRate: number; totalBilled: number; totalPaid: number; balance: number; status: "Paid" | "Partially Paid" | "Unpaid"; }'.
+src/app/admin/dashboard/page.tsx(2596,130): error TS2339: Property 'categoryId' does not exist on type '{ studentName: string; className: string; categoryName: string; daysPresent: number; dailyRate: number; totalBilled: number; totalPaid: number; balance: number; status: "Paid" | "Partially Paid" | "Unpaid"; }'.
+src/app/admin/dashboard/page.tsx(2616,120): error TS2339: Property 'studentId' does not exist on type '{ studentName: string; className: string; categoryName: string; daysPresent: number; dailyRate: number; totalBilled: number; totalPaid: number; balance: number; status: "Paid" | "Partially Paid" | "Unpaid"; }'.
+src/app/admin/dashboard/page.tsx(3179,133): error TS2339: Property 'studentId' does not exist on type '{ studentName: string; className: string; categoryName: string; daysPresent: number; dailyRate: number; totalBilled: number; totalPaid: number; balance: number; status: "Paid" | "Partially Paid" | "Unpaid"; }'.
+src/app/admin/dashboard/page.tsx(3429,122): error TS2304: Cannot find name 'calendarEventForm'.
+src/app/admin/dashboard/page.tsx(3429,162): error TS2304: Cannot find name 'setCalendarEventForm'.
+src/app/admin/dashboard/page.tsx(3429,187): error TS2304: Cannot find name 'calendarEventForm'.
+src/app/admin/dashboard/page.tsx(3434,103): error TS2304: Cannot find name 'calendarEventForm'.
+src/app/admin/dashboard/page.tsx(3434,142): error TS2304: Cannot find name 'setCalendarEventForm'.
+src/app/admin/dashboard/page.tsx(3434,167): error TS2304: Cannot find name 'calendarEventForm'.
+src/app/admin/dashboard/page.tsx(3438,76): error TS2304: Cannot find name 'calendarEventForm'.
+src/app/admin/dashboard/page.tsx(3438,156): error TS2304: Cannot find name 'setCalendarEventForm'.
+src/app/admin/dashboard/page.tsx(3438,181): error TS2304: Cannot find name 'calendarEventForm'.
+src/app/admin/dashboard/page.tsx(3450,149): error TS2304: Cannot find name 'calendarEventForm'.
+src/app/admin/dashboard/page.tsx(3450,195): error TS2304: Cannot find name 'setCalendarEventForm'.
+src/app/admin/dashboard/page.tsx(3450,220): error TS2304: Cannot find name 'calendarEventForm'.
+src/app/admin/dashboard/page.tsx(3508,81): error TS2304: Cannot find name 'communicationForm'.
+src/app/admin/dashboard/page.tsx(3508,136): error TS2304: Cannot find name 'setCommunicationForm'.
+src/app/admin/dashboard/page.tsx(3508,161): error TS2304: Cannot find name 'communicationForm'.
+src/app/admin/dashboard/page.tsx(3524,138): error TS2304: Cannot find name 'communicationForm'.
+src/app/admin/dashboard/page.tsx(3524,180): error TS2304: Cannot find name 'setCommunicationForm'.
+src/app/admin/dashboard/page.tsx(3524,205): error TS2304: Cannot find name 'communicationForm'.
+src/app/admin/dashboard/page.tsx(3528,154): error TS2304: Cannot find name 'communicationForm'.
+src/app/admin/dashboard/page.tsx(3528,196): error TS2304: Cannot find name 'setCommunicationForm'.
+src/app/admin/dashboard/page.tsx(3528,221): error TS2304: Cannot find name 'communicationForm'.
+src/app/admin/dashboard/page.tsx(3533,62): error TS2304: Cannot find name 'communicationForm'.
+src/app/admin/dashboard/page.tsx(3534,83): error TS2304: Cannot find name 'setCommunicationForm'.
+src/app/admin/dashboard/page.tsx(3534,108): error TS2304: Cannot find name 'communicationForm'.

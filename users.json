@@ -1,0 +1,71 @@
+{"users": [
+{
+  "localId": "13LiWk9vRxc5c0mD3iR2WYRV2HK2",
+  "email": "test@academy.com",
+  "emailVerified": false,
+  "passwordHash": "narWTJ0gqpkOYunyyM48H0rVhUSqGgo+ANlTWHLOLczSvfisoDzOFQEOP7bfft6Mf6EGjd4lgB2kzyj+LQcPUA==",
+  "salt": "+Lja++e/+8drFw==",
+  "lastSignedInAt": "1776984192599",
+  "createdAt": "1776984192599",
+  "providerUserInfo": []
+},
+{
+  "localId": "7prS8z8iPJOAXWBaUjNWaCSM7d03",
+  "email": "pannseducationcentre@gmail.com",
+  "emailVerified": true,
+  "passwordHash": "3HHWNPPywLVtjXWQKxy/RK9rSQLgLwDZaPBgDg13dh2gZy7sVFUcpnCjmq1nN69aFcBEoYWHa27ArZVSEaMQow==",
+  "salt": "I/TOw8DOlb2x5w==",
+  "lastSignedInAt": "1777891410844",
+  "createdAt": "1764940876176",
+  "providerUserInfo": []
+},
+{
+  "localId": "8WOUJfGoJzPj8mEUi9a5jPHRRgI2",
+  "email": "test_verification@academy.com",
+  "emailVerified": false,
+  "passwordHash": "iRcGoLGpCvJ5zIGngoFPiBz66+/UjAY78sku2RpcOYLmf5FCeXXfAPo//7pFWsYst1IA92DjbkoSAd5dWIJFaw==",
+  "salt": "RD6SK+66iL4piA==",
+  "lastSignedInAt": "1776984379367",
+  "createdAt": "1776984379367",
+  "providerUserInfo": []
+},
+{
+  "localId": "AaL16nwMeNcZplhJJc3cP1wKLaR2",
+  "email": "testingmyworks20@gmail.com",
+  "emailVerified": true,
+  "passwordHash": "hhvzfNJAja1ExStUle21c3GSGfXI9w/FKgEYyOg1T9iTfnTLbxLuWd9Fn+ayv8rrmsL0SQ0vyO7GIPhAIKwghQ==",
+  "salt": "O5FZZX9HeLvLCQ==",
+  "lastSignedInAt": "1777168333026",
+  "createdAt": "1776987330303",
+  "providerUserInfo": []
+},
+{
+  "localId": "IO8LFTwCt8ZIrydGdVss59jWfk12",
+  "email": "priscillaanderson661@gmail.com",
+  "emailVerified": true,
+  "passwordHash": "uFyfBUIo3JFSwH8PHZLv8lkRRBV1n3K/YBtRWWxXs+G3ezMGuCnvGspzNj8zIUpjRziyI6pBP16MuyJfMA6hwQ==",
+  "salt": "1B755BHACb7m8A==",
+  "lastSignedInAt": "1771905671294",
+  "createdAt": "1766573563909",
+  "providerUserInfo": []
+},
+{
+  "localId": "Km9TDYRa1aVxJpEyOvdbDeyKFCI2",
+  "email": "jeikwat52@gmail.com",
+  "emailVerified": false,
+  "passwordHash": "AxAjsIkKLwOYMrsysFYp2braun887K79bc7utJwSuAHRZL1B3NWdyyX4X4/w/GM4jYcDVRIHuPxyHMWX4qSe2A==",
+  "salt": "gkRcyaySeM0Z5g==",
+  "lastSignedInAt": "1767915189627",
+  "createdAt": "1767915189627",
+  "providerUserInfo": []
+},
+{
+  "localId": "KpzZ3S5XFRPAeNiB9PneLK1Y1aB3",
+  "email": "solandy242@gmail.com",
+  "emailVerified": false,
+  "passwordHash": "9uloIGnmU0aMgac0odtBWmPOFIijYjgPagtQbGby5rzc4fdOtEuaxqcAbGhovJ3fmvCrwldzmq96hr1IShwlHA==",
+  "salt": "osgaBvwJPI+egQ==",
+  "lastSignedInAt": "1770321719621",
+  "createdAt": "1765575075895",
+  "providerUserInfo": []
+}]}

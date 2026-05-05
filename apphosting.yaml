@@ -1,0 +1,45 @@
+# Settings to manage and configure a Firebase App Hosting backend.
+# https://firebase.google.com/docs/app-hosting/configure
+runConfig:
+  # Increase this value if you'd like to automatically spin up
+  # more instances in response to increased traffic.
+  maxInstances: 1
+  # Set a timeout for server responses.
+  timeoutSeconds: 120
+repository:
+  owner: Panns-2
+  name: zipsma-app
+  branch: main
+secretEnv:
+  - secret: NEXT_PUBLIC_FIREBASE_API_KEY
+    env: NEXT_PUBLIC_FIREBASE_API_KEY
+  - secret: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    env: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+  - secret: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    env: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+  - secret: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    env: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+  - secret: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    env: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+  - secret: NEXT_PUBLIC_FIREBASE_APP_ID
+    env: NEXT_PUBLIC_FIREBASE_APP_ID
+  - secret: NEXT_PUBLIC_FIREBASE_DATABASE_URL
+    env: NEXT_PUBLIC_FIREBASE_DATABASE_URL
+  - secret: CRON_SECRET
+    env: CRON_SECRET
+  - secret: TWILIO_ACCOUNT_SID
+    env: TWILIO_ACCOUNT_SID
+  - secret: TWILIO_AUTH_TOKEN
+    env: TWILIO_AUTH_TOKEN
+  - secret: TWILIO_PHONE_NUMBER
+    env: TWILIO_PHONE_NUMBER
+    
+# Schedule for the cron job to send fee reminders
+schedule:
+  schedule: "0 9 * * *" # Runs every day at 9:00 AM
+  target:
+    http:
+      path: "/api/cron"
+      method: GET
+      headers:
+        x-cron-secret: "CRON_SECRET"

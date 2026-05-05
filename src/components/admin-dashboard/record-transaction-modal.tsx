@@ -1,0 +1,291 @@
+
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Banknote, FilePlus, Loader2, Calendar as CalendarIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Student, AcademicPeriod, FeeCategory, postLedgerTransaction, updateLedgerTransaction, LedgerTransaction } from '@/lib/data-store';
+import { useToast } from '@/hooks/use-toast';
+import { Auth } from 'firebase/auth';
+import { Firestore } from 'firebase/firestore';
+
+interface RecordTransactionModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    student: Student | null;
+    academicPeriods: AcademicPeriod[];
+    feeCategories: FeeCategory[];
+    selectedPeriodId?: string;
+    db: any; // Firestore
+    auth: any; // Auth
+    onSuccess: () => void;
+    initialType?: 'fee' | 'payment' | 'adjustment';
+    transactionToEdit?: LedgerTransaction | null;
+}
+
+export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
+    isOpen,
+    onClose,
+    student,
+    academicPeriods,
+    feeCategories,
+    selectedPeriodId,
+    db,
+    auth,
+    onSuccess,
+    initialType = 'payment',
+    transactionToEdit
+}) => {
+    const { toast } = useToast();
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [form, setForm] = useState({
+        type: initialType as 'fee' | 'payment' | 'adjustment',
+        category: 'General',
+        amount: '',
+        date: new Date().toISOString().split('T')[0],
+        periodId: selectedPeriodId || ''
+    });
+
+    useEffect(() => {
+        if (isOpen) {
+            if (transactionToEdit) {
+                setForm({
+                    type: transactionToEdit.debit > 0 ? 'fee' : 'payment',
+                    category: transactionToEdit.category as string,
+                    amount: (transactionToEdit.debit || transactionToEdit.credit).toString(),
+                    date: transactionToEdit.date,
+                    periodId: transactionToEdit.periodId || ''
+                });
+            } else {
+                setForm(prev => ({
+                    ...prev,
+                    type: initialType,
+                    periodId: selectedPeriodId || prev.periodId || (academicPeriods[0]?.id || '')
+                }));
+            }
+        }
+    }, [isOpen, initialType, selectedPeriodId, academicPeriods, transactionToEdit]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!student) return;
+
+        setIsSubmitting(true);
+        try {
+            const amountValue = parseFloat(form.amount);
+            const selectedCategory = feeCategories.find(c => c.id === form.category);
+            const categoryName = selectedCategory ? selectedCategory.name : form.category;
+
+            const transactionData: any = {
+                date: form.date,
+                category: form.category,
+                description: categoryName || 'Transaction',
+                debit: form.type === 'fee' ? amountValue : 0,
+                credit: form.type === 'payment' ? amountValue : 0,
+                periodId: form.periodId || undefined
+            };
+
+            if (form.type === 'adjustment') {
+                if (amountValue >= 0) {
+                    transactionData.debit = amountValue;
+                    transactionData.credit = 0;
+                } else {
+                    transactionData.debit = 0;
+                    transactionData.credit = Math.abs(amountValue);
+                }
+            }
+
+            if (transactionToEdit) {
+                await updateLedgerTransaction(db, auth, student.studentId, transactionToEdit.id, transactionData, student.schoolId);
+                toast({ title: "Transaction Updated", description: "The transaction has been updated in the ledger." });
+            } else {
+                await postLedgerTransaction(db, auth, student.studentId, transactionData, student.schoolId);
+                toast({ title: "Transaction Recorded", description: "The transaction has been added to the ledger." });
+            }
+            onSuccess();
+            onClose();
+            setForm(prev => ({ ...prev, amount: '' }));
+        } catch (error: any) {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    if (!student) return null;
+
+    return (
+        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl font-jakarta">
+                <DialogHeader className={cn(
+                    "p-8",
+                    form.type === 'payment' ? "bg-emerald-600 text-white" : "bg-primary text-primary-foreground"
+                )}>
+                    <DialogTitle className="text-2xl font-bold flex items-center gap-3">
+                        {form.type === 'payment' ? <Banknote className="w-8 h-8" /> : <FilePlus className="w-8 h-8" />}
+                        {form.type === 'payment' ? 'Record Payment' : form.type === 'fee' ? 'Add Fee Charge' : 'New Transaction'}
+                    </DialogTitle>
+                    <DialogDescription className={cn(
+                        "font-medium",
+                        form.type === 'payment' ? "text-emerald-50" : "text-primary-foreground/80"
+                    )}>
+                        {form.type === 'payment' ? 'Record money received from' : 'Add a new fee for'} {student.name}.
+                    </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="p-8 space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Type</Label>
+                            <Select value={form.type} onValueChange={(val: any) => setForm({...form, type: val})}>
+                                <SelectTrigger className="h-12 border-primary/20 focus:ring-primary shadow-sm bg-muted/30">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="fee" className="font-bold text-primary">Fee Added (+)</SelectItem>
+                                    <SelectItem value="payment" className="font-bold text-emerald-600">Payment Received (-)</SelectItem>
+                                    <SelectItem value="adjustment" className="font-bold">Manual Adjustment</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Category</Label>
+                            <Select value={form.category} onValueChange={(val: any) => setForm({...form, category: val})}>
+                                <SelectTrigger className="h-12 border-primary/20 focus:ring-primary shadow-sm bg-muted/30">
+                                    <SelectValue placeholder="Select Category" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {feeCategories.length === 0 ? (
+                                        <SelectItem value="none" disabled>No Categories Setup</SelectItem>
+                                    ) : (
+                                        feeCategories.map(cat => (
+                                            <SelectItem key={cat.id} value={cat.id} className="font-bold">{cat.name}</SelectItem>
+                                        ))
+                                    )}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Amount (GH¢)</Label>
+                            <Input 
+                                type="number" 
+                                placeholder="0.00" 
+                                value={form.amount} 
+                                onChange={e => setForm({...form, amount: e.target.value})} 
+                                required 
+                                className="h-12 border-primary/20 shadow-sm bg-muted/30 text-numeric text-lg font-black"
+                            />
+                            {form.type === 'fee' && (student.feeDiscount || 0) > 0 && (
+                                <div className="mt-2 p-2 bg-primary/5 rounded-lg border border-primary/20 flex items-center justify-between animate-in fade-in slide-in-from-top-1 duration-300">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] text-primary font-black uppercase tracking-tighter">Student Discount Available</span>
+                                        <span className="text-xs font-bold text-primary/80">{student.feeDiscount}% off tuition/fees</span>
+                                    </div>
+                                    <Button 
+                                        type="button"
+                                        size="sm"
+                                        onClick={() => {
+                                            const base = Number(form.amount) || 0;
+                                            const discounted = base * (1 - ((student.feeDiscount || 0) / 100));
+                                            setForm({...form, amount: discounted.toFixed(2)});
+                                            toast({
+                                                title: "Discount Applied",
+                                                description: `${student.feeDiscount}% discount calculated manually.`,
+                                            });
+                                        }}
+                                        className="h-7 text-[10px] font-black uppercase tracking-widest bg-primary hover:bg-primary/90 text-white shadow-sm"
+                                    >
+                                        Apply
+                                    </Button>
+                                </div>
+                            )}
+                            {form.type === 'adjustment' && <p className="text-[10px] text-muted-foreground font-bold italic mt-1">Negative for credit adjustment.</p>}
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Date</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant={"outline"}
+                                        className={cn(
+                                            "w-full h-12 justify-start text-left font-medium border-primary/20 shadow-sm bg-muted/30",
+                                            !form.date && "text-muted-foreground"
+                                        )}
+                                    >
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {form.date ? form.date.split('-').reverse().join('/') : <span>Pick a date</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 border-primary/20 shadow-xl" align="start">
+                                    <Calendar
+                                        mode="single"
+                                        selected={form.date ? new Date(form.date + 'T00:00:00') : undefined}
+                                        onSelect={(date) => {
+                                            if (date) {
+                                                const year = date.getFullYear();
+                                                const month = String(date.getMonth() + 1).padStart(2, '0');
+                                                const day = String(date.getDate()).padStart(2, '0');
+                                                setForm({ ...form, date: `${year}-${month}-${day}` });
+                                            }
+                                        }}
+                                        initialFocus
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Academic Term</Label>
+                        <Select value={form.periodId} onValueChange={(val: any) => setForm({...form, periodId: val})}>
+                            <SelectTrigger className="h-12 border-primary/20 focus:ring-primary shadow-sm bg-muted/30 font-bold">
+                                <SelectValue placeholder="Select Term" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {academicPeriods.length === 0 ? (
+                                    <SelectItem value="none" disabled>No Terms Setup</SelectItem>
+                                ) : (
+                                    academicPeriods.map(p => (
+                                        <SelectItem key={p.id} value={p.id} className="font-bold">
+                                            {p.year} - {p.term}
+                                        </SelectItem>
+                                    ))
+                                )}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="flex gap-3 pt-4">
+                        <Button 
+                            type="button" 
+                            variant="ghost" 
+                            onClick={onClose} 
+                            className="flex-1 h-12 rounded-xl font-bold uppercase tracking-widest text-muted-foreground"
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            type="submit" 
+                            disabled={isSubmitting}
+                            className={cn(
+                                "flex-1 h-12 rounded-xl font-bold uppercase tracking-widest text-white shadow-lg transition-all",
+                                form.type === 'payment' ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200" : "bg-primary hover:bg-primary/90 shadow-primary/20"
+                            )}
+                        >
+                            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirm & Post'}
+                        </Button>
+                    </div>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+};

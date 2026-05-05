@@ -1,0 +1,48 @@
+{
+  "loginCarousel": [
+    {
+      "src": "/portal_side.png",
+      "alt": "Students in a classroom",
+      "hint": "classroom students"
+    },
+    {
+      "src": "/portal_side.png",
+      "alt": "Teacher helping a student",
+      "hint": "teacher student"
+    },
+    {
+      "src": "/portal_side.png",
+      "alt": "Children playing in a schoolyard",
+      "hint": "school playground"
+    }
+  ],
+  "loginSlideshow": [
+    {
+      "src": "/portal_side.png",
+      "alt": "Students collaborating in a modern classroom",
+      "hint": "students collaborating"
+    },
+    {
+      "src": "/portal_side.png",
+      "alt": "A university library with students studying",
+      "hint": "university library"
+    },
+    {
+      "src": "/portal_side.png",
+      "alt": "Teacher giving a lecture in a classroom",
+      "hint": "teacher lecture"
+    }
+  ],
+  "loginPage": {
+    "admin": {
+      "src": "/portal_side.png",
+      "alt": "Students studying together in a classroom environment.",
+      "hint": "students studying"
+    }
+  },
+  "teachersCorner": {
+    "src": "/teacher-ai-banner.png",
+    "alt": "A futuristic image of a robot or AI helping in a classroom setting.",
+    "hint": "robot teacher"
+  }
+}

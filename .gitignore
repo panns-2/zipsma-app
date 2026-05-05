@@ -1,0 +1,27 @@
+.next/
+.swc/
+*.log
+.env.local
+.firebase/
+
+# dependencies
+/node_modules
+
+# production
+/dist
+/build
+
+# misc
+.DS_Store
+
+# vercel
+.vercel
+
+# pnpm
+pnpm-lock.yaml
+node_modules
+node_modules
+node_modules
+node_modules
+node_modules
+node_modules
