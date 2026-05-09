@@ -49,7 +49,7 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
                             <TableHead className="font-bold text-primary text-xs uppercase tracking-wider font-jakarta">Description</TableHead>
                             <TableHead className="text-right font-bold text-primary text-xs uppercase tracking-wider font-jakarta">Fee (+)</TableHead>
                             <TableHead className="text-right font-bold text-primary text-xs uppercase tracking-wider font-jakarta">Payment (-)</TableHead>
-                            <TableHead className="text-right font-bold text-primary text-xs uppercase tracking-wider font-jakarta">Balance Due</TableHead>
+                            <TableHead className="text-right font-bold text-primary text-xs uppercase tracking-wider font-jakarta">Total Balance</TableHead>
                             <TableHead className="text-right font-bold text-primary text-xs uppercase tracking-wider font-jakarta">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -99,6 +99,16 @@ export const LedgerTable: React.FC<LedgerTableProps> = ({
                                                 if (displayDesc === 'feeding') displayDesc = 'Feeding Fee';
                                                 else if (displayDesc === 'transportation') displayDesc = 'Transportation';
                                                 else if (displayDesc === 'general') displayDesc = 'General Fee';
+                                                
+                                                if (displayDesc === 'Daily Fee Deduction' && t.category) {
+                                                    const catObj = feeCategories.find(c => c.id === t.category || c.name === t.category);
+                                                    if (catObj) {
+                                                        displayDesc = `Daily ${catObj.name}`;
+                                                    } else if (t.category !== 'daily' && t.category !== 'feeding') {
+                                                        // Fallback if category name is not found but it has a specific ID
+                                                        displayDesc = `Daily Fee: ${t.category.charAt(0).toUpperCase() + t.category.slice(1).replace(/_/g, ' ')}`;
+                                                    }
+                                                }
                                                 
                                                 displayDesc = displayDesc || 'Transaction';
 

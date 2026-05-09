@@ -6,7 +6,7 @@ import StudentProfile from '@/components/student-profile';
 import ContactBar from '@/components/contact-bar';
 import { StudentLedgerView } from '@/components/student-ledger-view';
 import { useFirebase, useAuth } from '@/firebase/client-provider';
-import { Student, getStudentsByParentId, AcademicPeriod, getAcademicPeriods } from '@/lib/data-store';
+import { Student, getStudentsByParentId, AcademicPeriod, getAcademicPeriods, getFeeCategories, FeeCategory } from '@/lib/data-store';
 import { Loader2 } from 'lucide-react';
 import Header from '@/components/header';
 
@@ -21,6 +21,7 @@ function ParentDashboardContent() {
   const [children, setChildren] = useState<Student[]>([]);
   const [academicPeriods, setAcademicPeriods] = useState<AcademicPeriod[]>([]);
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>('');
+  const [feeCategories, setFeeCategories] = useState<FeeCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -39,6 +40,9 @@ function ParentDashboardContent() {
         const current = periods.find(p => p.isCurrent);
         if (current) setSelectedPeriodId(current.id);
         else if (periods.length > 0) setSelectedPeriodId(periods[0].id);
+
+        const categories = await getFeeCategories(db, schoolId);
+        setFeeCategories(categories);
 
         const students = await getStudentsByParentId(db, schoolId, parentId);
         setChildren(students);
@@ -86,7 +90,7 @@ function ParentDashboardContent() {
       />
       <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-8 mt-6">
         <div className="mb-8">
-            <h1 className="text-3xl font-jakarta font-bold tracking-tight text-foreground">Family Dashboard</h1>
+            <h1 className="text-3xl font-sans font-bold tracking-tight text-foreground">Family Dashboard</h1>
             <p className="text-muted-foreground mt-1">Unified view of your children's financial statements</p>
         </div>
         
@@ -110,6 +114,8 @@ function ParentDashboardContent() {
                   student={student} 
                   periods={academicPeriods} 
                   selectedPeriodId={selectedPeriodId} 
+                  feeCategories={feeCategories}
+                  schoolId={schoolId || undefined}
                 />
               </div>
             </div>

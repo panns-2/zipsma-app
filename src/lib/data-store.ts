@@ -38,7 +38,6 @@ const periodsCollection = 'academicPeriods';
 const reportSettingsCollection = 'reportSettings';
 const studentReportsCollection = 'studentReports';
 const feeCategoriesCollection = 'feeCategories';
-const dailyFeeCategoriesCollection = 'dailyFeeCategories';
 const pendingPaymentsCollection = 'pending_payments';
 
 
@@ -69,6 +68,7 @@ export interface LedgerTransaction {
     date: string;
     type: 'fee' | 'payment' | 'adjustment';
     category: string; // Dynamic fee category
+    categoryId?: string; // Strict ID reference
     description: string;
     debit: number;  // Amount charged (+)
     credit: number; // Amount paid (-)
@@ -82,13 +82,10 @@ export interface FeeCategory {
     id: string;
     name: string;
     schoolId: string;
+    isDaily?: boolean;
 }
 
-export interface DailyFeeCategory {
-    id: string;
-    name: string;
-    schoolId: string;
-}
+
 export interface Student {
     // Core Info
     name: string;
@@ -615,6 +612,50 @@ export async function addStudent(db: Firestore, auth: Auth, schoolId: string, ne
     });
 }
 
+/**
+ * Centrally resolves a student document reference and snapshot using multiple fallback strategies.
+ * Handles legacy ID formats, composite IDs, and field-based lookups.
+ */
+export async function resolveStudentDoc(db: Firestore, idOrStudentId: string, schoolId?: string) {
+    const studentsRef = collection(db, studentsCollection);
+    
+    // 1. Try direct ID lookup (most efficient)
+    const directRef = doc(db, studentsCollection, idOrStudentId);
+    const directSnap = await getDoc(directRef);
+    if (directSnap.exists()) return { ref: directRef, snap: directSnap };
+
+    // 2. Try composite ID (SCHOOLA_S001)
+    if (schoolId) {
+        const compositeId = `${schoolId.toUpperCase()}_${idOrStudentId.toUpperCase()}`;
+        const compositeRef = doc(db, studentsCollection, compositeId);
+        const compositeSnap = await getDoc(compositeRef);
+        if (compositeSnap.exists()) return { ref: compositeRef, snap: compositeSnap };
+        
+        // Also try original case schoolId
+        const compositeIdOrig = `${schoolId}_${idOrStudentId.toUpperCase()}`;
+        if (compositeIdOrig !== compositeId) {
+            const compositeRefOrig = doc(db, studentsCollection, compositeIdOrig);
+            const compositeSnapOrig = await getDoc(compositeRefOrig);
+            if (compositeSnapOrig.exists()) return { ref: compositeRefOrig, snap: compositeSnapOrig };
+        }
+    }
+
+    // 3. Fallback to query by studentId field
+    const qBase = schoolId 
+        ? query(studentsRef, where("schoolId", "in", [schoolId, schoolId.toUpperCase()]), where("studentId", "==", idOrStudentId))
+        : query(studentsRef, where("studentId", "==", idOrStudentId));
+    
+    const querySnap = await getDocs(qBase);
+    if (!querySnap.empty) return { ref: querySnap.docs[0].ref, snap: querySnap.docs[0] };
+
+    // 4. Last resort: search by studentId alone across all schools
+    const qLast = query(studentsRef, where("studentId", "==", idOrStudentId));
+    const snapLast = await getDocs(qLast);
+    if (!snapLast.empty) return { ref: snapLast.docs[0].ref, snap: snapLast.docs[0] };
+
+    throw new Error(`Student record not found for ID: ${idOrStudentId}. Please ensure the student exists.`);
+}
+
 // --- Helper for composite IDs ---
 function getStudentDocRef(db: Firestore, idOrStudentId: string, schoolId?: string) {
     if (!schoolId) return doc(db, studentsCollection, idOrStudentId);
@@ -622,11 +663,13 @@ function getStudentDocRef(db: Firestore, idOrStudentId: string, schoolId?: strin
     const upperSchoolId = schoolId.toUpperCase();
     const upperId = idOrStudentId.toUpperCase();
     
-    const compositeId = upperId.startsWith(`${upperSchoolId}_`) 
-        ? upperId 
-        : `${upperSchoolId}_${upperId}`;
-        
-    return doc(db, studentsCollection, compositeId);
+    // 1. If it already has the standard prefix, use it as is
+    if (upperId.startsWith(`${upperSchoolId}_`)) {
+        return doc(db, studentsCollection, idOrStudentId);
+    }
+    
+    // 2. Fallback to standard composite ID for new records if schoolId is provided
+    return doc(db, studentsCollection, `${upperSchoolId}_${idOrStudentId}`);
 }
 
 export async function archiveStudent(db: Firestore, auth: Auth, studentId: string, archive = true, schoolId?: string) {
@@ -713,14 +756,32 @@ export async function updateStudentId(db: Firestore, auth: Auth, oldStudentId: s
     });
 }
 
-export async function updateStudentDetails(db: Firestore, storage: FirebaseStorage, auth: Auth, studentId: string, details: Partial<Omit<Student, 'studentId' | 'dateAdded'>>, photoFile: File | null, schoolId?: string) {
+export async function updateStudentDetails(db: Firestore, storage: FirebaseStorage, auth: Auth, studentIdOrDocId: string, details: Partial<Omit<Student, 'studentId' | 'dateAdded'>>, photoFile: File | null, schoolId?: string) {
     const user = await ensureUserAuthenticated(auth);
 
-    const studentDocRef = getStudentDocRef(db, studentId, schoolId);
+    let studentDocRef = getStudentDocRef(db, studentIdOrDocId, schoolId);
+    let studentSnap = await getDoc(studentDocRef);
+    
+    if (!studentSnap.exists() && schoolId && !studentIdOrDocId.includes('_')) {
+        const legacyDocRef = doc(db, studentsCollection, studentIdOrDocId.toUpperCase());
+        const legacySnap = await getDoc(legacyDocRef);
+        if (legacySnap.exists() && legacySnap.data()?.schoolId === schoolId.toUpperCase()) {
+            studentDocRef = legacyDocRef;
+            studentSnap = legacySnap;
+        }
+    }
+    
+    const existingSchoolId = studentSnap.exists() ? studentSnap.data()?.schoolId : null;
+    
     const updateData: { [key: string]: any } = { ...details };
+    
+    const resolvedSchoolId = existingSchoolId || schoolId;
+    if (resolvedSchoolId) {
+        updateData.schoolId = resolvedSchoolId;
+    }
 
     if (photoFile) {
-        const storageRef = ref(storage, `profilePictures/${user.uid}/${studentId}-${photoFile.name}`);
+        const storageRef = ref(storage, `profilePictures/${user.uid}/${studentIdOrDocId}-${photoFile.name}`);
         await uploadBytes(storageRef, photoFile);
         updateData.profilePicture = await getDownloadURL(storageRef);
     }
@@ -793,12 +854,31 @@ export async function deleteGeneralPayment(db: Firestore, auth: Auth, studentId:
 
 export async function updateDailyCost(db: Firestore, auth: Auth, studentId: string, cost: number, schoolId?: string) {
   await ensureUserAuthenticated(auth);
-  const studentDocRef = getStudentDocRef(db, studentId, schoolId);
-  await updateDoc(studentDocRef, { dailyFeedingCost: cost }).catch(async (serverError) => {
+  let studentDocRef = getStudentDocRef(db, studentId, schoolId);
+  let studentSnap = await getDoc(studentDocRef);
+  
+  if (!studentSnap.exists() && schoolId && !studentId.includes('_')) {
+      const legacyDocRef = doc(db, studentsCollection, studentId.toUpperCase());
+      const legacySnap = await getDoc(legacyDocRef);
+      if (legacySnap.exists() && legacySnap.data()?.schoolId === schoolId.toUpperCase()) {
+          studentDocRef = legacyDocRef;
+          studentSnap = legacySnap;
+      }
+  }
+
+  const existingSchoolId = studentSnap.exists() ? studentSnap.data()?.schoolId : null;
+  
+  const updateData: any = { dailyFeedingCost: cost };
+  const resolvedSchoolId = existingSchoolId || schoolId;
+  if (resolvedSchoolId) {
+      updateData.schoolId = resolvedSchoolId;
+  }
+  
+  await updateDoc(studentDocRef, updateData).catch(async (serverError) => {
     const permissionError = new FirestorePermissionError({
         path: studentDocRef.path,
         operation: 'update',
-        requestResourceData: { dailyFeedingCost: cost },
+        requestResourceData: updateData,
     });
     errorEmitter.emit('permission-error', permissionError);
     throw permissionError;
@@ -898,9 +978,25 @@ export async function deleteTransportationPayment(db: Firestore, auth: Auth, stu
 }
 
 export async function setAttendance(db: Firestore, auth: Auth, studentId: string, date: string, attended: boolean, periodId?: string, schoolId?: string) {
-    const user = await ensureUserAuthenticated(auth);
-    const studentDocRef = getStudentDocRef(db, studentId, schoolId);
-    const studentSnap = await getDoc(studentDocRef);
+    let user: User | null = null;
+    try {
+        user = await ensureUserAuthenticated(auth);
+    } catch (e) {
+        // Staff members are not authenticated via Firebase Auth
+        user = null;
+    }
+    let studentDocRef = getStudentDocRef(db, studentId, schoolId);
+    let studentSnap = await getDoc(studentDocRef);
+    
+    if (!studentSnap.exists() && schoolId && !studentId.includes('_')) {
+        const legacyDocRef = doc(db, studentsCollection, studentId.toUpperCase());
+        const legacySnap = await getDoc(legacyDocRef);
+        if (legacySnap.exists() && legacySnap.data()?.schoolId === schoolId.toUpperCase()) {
+            studentDocRef = legacyDocRef;
+            studentSnap = legacySnap;
+        }
+    }
+
     const student = studentSnap.data() as Student | undefined;
     if (student) {
         let newAttendance = student.attendance || [];
@@ -922,69 +1018,32 @@ export async function setAttendance(db: Firestore, auth: Auth, studentId: string
         
         let newLedger = [...(student.ledger || [])];
 
-        // --- AUTOMATED LEDGER UPDATES ---
-        if (attended) {
-            // 1. Feeding Fee
-            if (Number(student.dailyFeedingCost) > 0) {
-                const feedingExists = newLedger.some(t => t.date === date && t.category === 'feeding' && t.type === 'fee' && !t.isVoided);
-                if (!feedingExists) {
-                    newLedger.push({
-                        id: `auto-feeding-${date}-${Date.now()}`,
-                        date: date,
-                        type: 'fee',
-                        category: 'feeding',
-                        description: 'Daily Feeding Fee',
-                        debit: Number(student.dailyFeedingCost),
-                        credit: 0,
-                        recordedBy: user.uid,
-                        periodId: periodId || student.currentPeriodId || undefined
-                    });
-                    statusChanged = true;
-                }
-            }
-
-            // 2. Custom Daily Fees
-            if (student.dailyFees && student.dailyFees.length > 0) {
-                student.dailyFees.forEach(df => {
-                    const feeExists = newLedger.some(t => t.date === date && t.category === df.categoryId && t.type === 'fee' && !t.isVoided);
-                    if (!feeExists) {
-                        newLedger.push({
-                            id: `auto-df-${df.categoryId}-${date}-${Date.now()}`,
-                            date: date,
-                            type: 'fee',
-                            category: df.categoryId,
-                            description: `Daily Fee Deduction`,
-                            debit: Number(df.rate),
-                            credit: 0,
-                            recordedBy: user.uid,
-                            periodId: periodId || student.currentPeriodId || undefined
-                        });
-                        statusChanged = true;
-                    }
-                });
-            }
-        } else {
-            // Remove auto-generated fees if marked absent
-            const initialCount = newLedger.length;
-            newLedger = newLedger.filter(t => !(t.date === date && t.id.startsWith('auto-')));
-            if (newLedger.length !== initialCount) {
-                statusChanged = true;
-            }
-        }
+        // --- DYNAMIC FEE CALCULATION ---
+        // We no longer write automated charges to the ledger. 
+        // Daily fees are calculated dynamically in the UI based on attendance records.
 
         if (statusChanged) {
             // Re-sort ledger by date
             newLedger.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         }
 
-        await updateDoc(studentDocRef, { 
+        const existingSchoolId = student.schoolId;
+        const resolvedSchoolId = existingSchoolId || schoolId;
+
+        const updateData: any = {
             attendance: newAttendance,
             ledger: newLedger 
-        }).catch(async (serverError) => {
+        };
+
+        if (resolvedSchoolId) {
+            updateData.schoolId = resolvedSchoolId;
+        }
+
+        await updateDoc(studentDocRef, updateData).catch(async (serverError) => {
             const permissionError = new FirestorePermissionError({
                 path: studentDocRef.path,
                 operation: 'update',
-                requestResourceData: { attendance: newAttendance, ledger: newLedger },
+                requestResourceData: updateData,
             });
             errorEmitter.emit('permission-error', permissionError);
             throw permissionError;
@@ -1005,10 +1064,10 @@ export async function getFeeCategories(db: Firestore, schoolId: string) {
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeeCategory));
 }
 
-export async function addFeeCategory(db: Firestore, auth: Auth, schoolId: string, name: string) {
+export async function addFeeCategory(db: Firestore, auth: Auth, schoolId: string, name: string, isDaily?: boolean) {
     await ensureUserAuthenticated(auth);
     const categoriesCol = collection(db, feeCategoriesCollection);
-    const categoryData = { name, schoolId: schoolId.toUpperCase() };
+    const categoryData = { name, schoolId: schoolId.toUpperCase(), isDaily: isDaily || false };
     const docRef = await addDoc(categoriesCol, categoryData).catch(serverError => {
         throw new FirestorePermissionError({ path: categoriesCol.path, operation: 'write', requestResourceData: categoryData });
     });
@@ -1023,11 +1082,15 @@ export async function deleteFeeCategory(db: Firestore, auth: Auth, id: string) {
     });
 }
 
-export async function updateFeeCategory(db: Firestore, auth: Auth, id: string, name: string) {
+export async function updateFeeCategory(db: Firestore, auth: Auth, id: string, name: string, isDaily?: boolean) {
     await ensureUserAuthenticated(auth);
     const docRef = doc(db, feeCategoriesCollection, id);
-    await updateDoc(docRef, { name }).catch(serverError => {
-        throw new FirestorePermissionError({ path: docRef.path, operation: 'update', requestResourceData: { name } });
+    const updateData: any = { name };
+    if (isDaily !== undefined) {
+        updateData.isDaily = isDaily;
+    }
+    await updateDoc(docRef, updateData).catch(serverError => {
+        throw new FirestorePermissionError({ path: docRef.path, operation: 'update', requestResourceData: updateData });
     });
 }
 
@@ -1170,24 +1233,8 @@ export async function migrateToLedger(db: Firestore, auth: Auth, studentId: stri
 
     // Migrate Custom Daily Fees
     if (student.dailyFees && (student.dailyFees || []).length > 0) {
-        const attendedDays = (student.attendance || []).filter(a => a.attended).length;
-        if (attendedDays > 0) {
-            student.dailyFees.forEach(df => {
-                const migrationId = `mig-df-${df.categoryId}-${studentId}`;
-                if (!ledger.some(t => t.id === migrationId)) {
-                    ledger.push({
-                        id: migrationId,
-                        date: safeDateString(student.dateAdded),
-                        type: 'fee',
-                        category: 'general',
-                        description: `Daily Fee Accrual (Historical)`,
-                        debit: (df.rate || 0) * attendedDays,
-                        credit: 0,
-                        recordedBy: user.uid
-                    });
-                }
-            });
-        }
+        // No longer writing individual daily fee transactions to the ledger to keep it clean.
+        // Balances will be calculated dynamically from attendance data in the UI.
     }
 
     // Sort by date
@@ -1216,47 +1263,87 @@ export async function migrateToLedger(db: Firestore, auth: Auth, studentId: stri
     });
 }
 
-export async function postLedgerTransaction(db: Firestore, auth: Auth, studentId: string, transaction: Omit<LedgerTransaction, 'id' | 'recordedBy'>, schoolId?: string) {
-    const user = await ensureUserAuthenticated(auth);
-    const studentDocRef = getStudentDocRef(db, studentId, schoolId);
-    const studentSnap = await getDoc(studentDocRef);
-    const student = studentSnap.data() as Student | undefined;
-
-    if (student) {
-        const newTransaction: LedgerTransaction = {
-            ...transaction,
-            date: safeDateString(transaction.date),
-            id: Date.now().toString(),
-            recordedBy: user.uid
-        };
-
-        // Safety: Remove undefined fields that crash Firestore
-        Object.keys(newTransaction).forEach(key => {
-            if (newTransaction[key] === undefined) delete newTransaction[key];
-        });
-        const updatedLedger = [...(student.ledger || []), newTransaction];
-        // Keep it sorted
-        updatedLedger.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-        await updateDoc(studentDocRef, { ledger: updatedLedger }).catch(async (serverError) => {
-            const permissionError = new FirestorePermissionError({
-                path: studentDocRef.path,
-                operation: 'update',
-                requestResourceData: { ledger: updatedLedger },
-            });
-            errorEmitter.emit('permission-error', permissionError);
-            throw permissionError;
-        });
+/**
+ * Utility to identify if a transaction belongs to the Daily Fee ledger.
+ * This checks the category's metadata, automated IDs, and legacy hardcoded fallbacks.
+ */
+export function isDailyTransaction(t: LedgerTransaction, categories: FeeCategory[]) {
+    // 0. Strict ID matching (The most reliable)
+    if (t.categoryId) {
+        const cat = categories.find(c => c.id === t.categoryId);
+        if (cat) return !!cat.isDaily;
     }
+
+    const catValue = String(t.category || "").toLowerCase().trim();
+    
+    // 1. Check if the category value matches a known daily category ID or Name
+    const cat = categories.find(c => c.id.toLowerCase() === catValue || c.name.toLowerCase() === catValue);
+    if (cat?.isDaily) return true;
+    
+    // 2. Automated transactions (attendance-based or migration)
+    if (t.id && (
+        t.id.startsWith('auto-df-') || 
+        t.id.startsWith('auto-feeding-') || 
+        t.id.startsWith('feeding-') || 
+        t.id.startsWith('mig-df-') || 
+        t.id.startsWith('mig-fa-')
+    )) return true;
+    
+    // 3. Fallback for legacy daily categories (Only if not matched to a different non-daily category)
+    if (!cat || cat.isDaily) {
+        const markers = ['feeding', 'daily', 'canteen', 'extra classes', 'late feeding'];
+        if (markers.some(m => catValue.includes(m))) return true;
+    }
+    
+    return false;
 }
 
-export async function postBulkClassLedgerTransaction(db: Firestore, auth: Auth, schoolId: string, className: string, transaction: Omit<LedgerTransaction, 'id' | 'recordedBy'>, applyDiscounts: boolean = true, studentIds?: string[]) {
+export async function postLedgerTransaction(db: Firestore, auth: Auth, idOrStudentId: string, transaction: Omit<LedgerTransaction, 'id' | 'recordedBy'> & { categoryId?: string }, schoolId?: string) {
+    const user = await ensureUserAuthenticated(auth);
+    
+    const { ref: finalDocRef, snap: studentSnap } = await resolveStudentDoc(db, idOrStudentId, schoolId);
+    const student = studentSnap.data() as Student;
+
+    const newTransaction: LedgerTransaction = {
+        ...transaction,
+        categoryId: transaction.categoryId || (transaction as any).category, // NEW: Ensure ID is preserved
+        date: safeDateString(transaction.date),
+        id: Date.now().toString(),
+        recordedBy: user.uid
+    };
+
+    // Safety: Remove undefined fields that crash Firestore
+    Object.keys(newTransaction).forEach(key => {
+        if ((newTransaction as any)[key] === undefined) delete (newTransaction as any)[key];
+    });
+    const updatedLedger = [...(student.ledger || []), newTransaction];
+    // Keep it sorted
+    updatedLedger.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    console.log("[postLedgerTransaction] Updating document:", finalDocRef.path);
+    await updateDoc(finalDocRef, { ledger: updatedLedger }).then(() => {
+        console.log("[postLedgerTransaction] updateDoc successful.");
+    }).catch(async (serverError) => {
+        console.error("[postLedgerTransaction] updateDoc failed:", serverError);
+        const permissionError = new FirestorePermissionError({
+            path: finalDocRef.path,
+            operation: 'update',
+            requestResourceData: { ledger: updatedLedger },
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        throw permissionError;
+    });
+}
+
+export async function postBulkClassLedgerTransaction(db: Firestore, auth: Auth, schoolId: string, className: string, transaction: Omit<LedgerTransaction, 'id' | 'recordedBy'> & { categoryId?: string }, applyDiscounts: boolean = true, studentIds?: string[], isDailyFee?: boolean) {
     const user = await ensureUserAuthenticated(auth);
     const students = await getStudents(db, schoolId);
-    let classStudents = students.filter(s => s.className === className);
+    let classStudents = className === 'all' 
+        ? students 
+        : students.filter(s => s.className === className);
     
     // If specific student IDs are provided, filter only those
-    if (studentIds && studentIds.length > 0) {
+    if (studentIds) {
         classStudents = classStudents.filter(s => studentIds.includes(s.studentId));
     }
     
@@ -1271,14 +1358,25 @@ export async function postBulkClassLedgerTransaction(db: Firestore, auth: Auth, 
             ? doc(db, studentsCollection, student.id) 
             : getStudentDocRef(db, student.studentId, schoolId);
         const discount = applyDiscounts ? (student.feeDiscount || 0) : 0;
-        const baseDebit = transaction.debit || 0;
-        const finalDebit = discount > 0 ? baseDebit * (1 - discount / 100) : baseDebit;
-        const finalDescription = (discount > 0 && transaction.type === 'fee')
-            ? `${transaction.description} (${discount}% Discount)`
+        
+        // Extract categoryId from transaction if passed, otherwise fallback to category name
+        const lookupCategoryId = transaction.categoryId || transaction.category;
+        
+        const baseDebit = isDailyFee 
+            ? (student.dailyFees?.find((df: any) => df.categoryId === lookupCategoryId)?.rate || transaction.debit || 0)
+            : (transaction.debit || 0);
+        const discountToApply = (applyDiscounts && !isDailyFee) ? discount : 0;
+        const finalDebit = discountToApply > 0 ? baseDebit * (1 - discountToApply / 100) : baseDebit;
+        const finalDescription = (discountToApply > 0 && transaction.type === 'fee')
+            ? `${transaction.description} (${discountToApply}% Discount)`
             : transaction.description;
 
+        // Remove categoryId from the final saved transaction to match LedgerTransaction schema
+        const { categoryId, ...safeTransaction } = transaction as any;
+
         const newTransaction: LedgerTransaction = {
-            ...transaction,
+            ...safeTransaction,
+            categoryId: lookupCategoryId, // NEW: Persist the ID for strict lookups
             debit: finalDebit,
             description: finalDescription,
             date: safeDateString(transaction.date),
@@ -1294,7 +1392,10 @@ export async function postBulkClassLedgerTransaction(db: Firestore, auth: Auth, 
         const updatedLedger = [...(student.ledger || []), newTransaction];
         updatedLedger.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-        batch.update(studentDocRef, { ledger: updatedLedger });
+        batch.update(studentDocRef, { 
+            ledger: updatedLedger,
+            ...(student.schoolId ? { schoolId: student.schoolId } : (schoolId ? { schoolId: schoolId.toUpperCase() } : {}))
+        });
     });
 
     await batch.commit().catch(async (serverError) => {
@@ -1303,7 +1404,7 @@ export async function postBulkClassLedgerTransaction(db: Firestore, auth: Auth, 
     });
 }
 
-export async function postBulkDailyPayments(db: Firestore, auth: Auth, schoolId: string, payments: { studentId: string, amount: number, date: string, category: string, description: string, periodId?: string }[]) {
+export async function postBulkDailyPayments(db: Firestore, auth: Auth, schoolId: string, payments: { studentId: string, amount: number, date: string, category: string, categoryId?: string, description: string, periodId?: string }[]) {
     const user = await ensureUserAuthenticated(auth);
     if (payments.length === 0) return;
 
@@ -1325,6 +1426,7 @@ export async function postBulkDailyPayments(db: Firestore, auth: Auth, schoolId:
             date: safeDateString(payment.date),
             type: 'payment',
             category: payment.category,
+            categoryId: payment.categoryId || payment.category, // NEW: Persist ID for strict matching
             description: payment.description,
             debit: 0,
             credit: payment.amount,
@@ -1340,7 +1442,10 @@ export async function postBulkDailyPayments(db: Firestore, auth: Auth, schoolId:
         const updatedLedger = [...(student.ledger || []), newTransaction];
         updatedLedger.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-        batch.update(studentDocRef, { ledger: updatedLedger });
+        batch.update(studentDocRef, { 
+            ledger: updatedLedger,
+            ...(student.schoolId ? { schoolId: student.schoolId } : (schoolId ? { schoolId: schoolId.toUpperCase() } : {}))
+        });
     });
 
     await batch.commit().catch(async (serverError) => {
@@ -1351,9 +1456,8 @@ export async function postBulkDailyPayments(db: Firestore, auth: Auth, schoolId:
 
 export async function voidLedgerTransaction(db: Firestore, auth: Auth, studentId: string, transactionId: string, reason: string, schoolId?: string) {
     await ensureUserAuthenticated(auth);
-    const studentDocRef = getStudentDocRef(db, studentId, schoolId);
-    const studentSnap = await getDoc(studentDocRef);
-    const student = studentSnap.data() as Student | undefined;
+    const { ref: studentDocRef, snap: studentSnap } = await resolveStudentDoc(db, studentId, schoolId);
+    const student = studentSnap.data() as Student;
 
     if (student && student.ledger) {
         const updatedLedger = student.ledger.map(t => {
@@ -1363,11 +1467,22 @@ export async function voidLedgerTransaction(db: Firestore, auth: Auth, studentId
             return t;
         });
 
-        await updateDoc(studentDocRef, { ledger: updatedLedger }).catch(async (serverError) => {
+        const existingSchoolId = student.schoolId;
+        const resolvedSchoolId = existingSchoolId || schoolId;
+
+        const updateData: any = {
+            ledger: updatedLedger
+        };
+
+        if (resolvedSchoolId) {
+            updateData.schoolId = resolvedSchoolId;
+        }
+
+        await updateDoc(studentDocRef, updateData).catch(async (serverError) => {
             const permissionError = new FirestorePermissionError({
                 path: studentDocRef.path,
                 operation: 'update',
-                requestResourceData: { ledger: updatedLedger },
+                requestResourceData: updateData,
             });
             errorEmitter.emit('permission-error', permissionError);
             throw permissionError;
@@ -1375,11 +1490,76 @@ export async function voidLedgerTransaction(db: Firestore, auth: Auth, studentId
     }
 }
 
+export async function voidFeeCategoryRecords(db: Firestore, auth: Auth, studentId: string, categoryId: string, categoryName: string, reason: string, schoolId?: string) {
+    await ensureUserAuthenticated(auth);
+    
+    // 1. Resolve the correct document reference (handling legacy IDs)
+    const { ref: studentDocRef, snap: studentSnap } = await resolveStudentDoc(db, studentId, schoolId);
+    const student = studentSnap.data() as Student;
+
+    if (student && student.ledger) {
+        let matchCount = 0;
+        const updatedLedger = student.ledger.map(t => {
+            const tCategory = String(t.category || "").toLowerCase();
+            const tDescription = String(t.description || "").toLowerCase();
+            const targetId = String(categoryId).toLowerCase();
+            const targetName = String(categoryName).toLowerCase();
+
+            const isMatch = (t.id && t.id.startsWith(`auto-df-${categoryId}`)) || 
+                           (t.id && t.id.startsWith(`auto-feeding-`) && categoryId === 'feeding') ||
+                           tCategory === targetId || 
+                           tCategory === targetName || 
+                           tDescription.includes(targetName) ||
+                           (categoryId === 'feeding' && (tCategory === 'feeding' || tCategory === 'feeding fee' || tDescription.includes('feeding'))) ||
+                           (categoryName === 'Feeding Fee' && (tCategory === 'feeding' || tCategory === 'feeding fee' || tDescription.includes('feeding')));
+            
+            console.log(`[voidFeeCategoryRecords] Checking entry ${t.id}: tCategory="${tCategory}", tDescription="${tDescription}", isMatch=${isMatch}, type=${t.type}, isVoided=${t.isVoided}`);
+            
+            if (isMatch && (!t.type || t.type === 'fee' || t.type === 'payment') && !t.isVoided) {
+                console.log(`[voidFeeCategoryRecords] Match found: ${t.id} (${t.category}) - ${t.description}`);
+                matchCount++;
+                return { ...t, isVoided: true, voidedReason: reason };
+            }
+            return t;
+        });
+
+        if (matchCount === 0) {
+            console.log(`[voidFeeCategoryRecords] No active records found to clear for ${categoryName}`);
+            return 0;
+        }
+
+        const existingSchoolId = student.schoolId;
+        const resolvedSchoolId = existingSchoolId || schoolId;
+
+        const updateData: any = {
+            ledger: updatedLedger
+        };
+
+        if (resolvedSchoolId) {
+            updateData.schoolId = resolvedSchoolId;
+        }
+
+        await updateDoc(studentDocRef, updateData).catch(async (serverError) => {
+            const permissionError = new FirestorePermissionError({
+                path: studentDocRef.path,
+                operation: 'update',
+                requestResourceData: updateData,
+            });
+            errorEmitter.emit('permission-error', permissionError);
+            throw permissionError;
+        });
+
+        return matchCount;
+    } else {
+        console.warn(`[voidFeeCategoryRecords] Student ${studentId} has no ledger.`);
+        return 0;
+    }
+}
+
 export async function updateLedgerTransaction(db: Firestore, auth: Auth, studentId: string, transactionId: string, updates: Partial<LedgerTransaction>, schoolId?: string) {
     await ensureUserAuthenticated(auth);
-    const studentDocRef = getStudentDocRef(db, studentId, schoolId);
-    const studentSnap = await getDoc(studentDocRef);
-    const student = studentSnap.data() as Student | undefined;
+    const { ref: studentDocRef, snap: studentSnap } = await resolveStudentDoc(db, studentId, schoolId);
+    const student = studentSnap.data() as Student;
 
     if (student && student.ledger) {
         const updatedLedger = student.ledger.map(t => {
@@ -2432,103 +2612,37 @@ export async function saveStudentReport(db: Firestore, auth: Auth, report: Stude
     });
 }
 
-// --- DAILY FEE CATEGORY FUNCTIONS ---
 
-export async function getDailyFeeCategories(db: Firestore, schoolId: string): Promise<DailyFeeCategory[]> {
-    if (!schoolId) return [];
-    const categoriesCol = collection(db, dailyFeeCategoriesCollection);
-    const q = query(categoriesCol, where("schoolId", "==", schoolId));
-    const snapshot = await getDocs(q).catch(serverError => {
-        if (serverError.code === 'permission-denied') throw new FirestorePermissionError({ path: categoriesCol.path, operation: 'list' });
-        throw serverError;
-    });
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyFeeCategory));
-}
-
-export async function addDailyFeeCategory(db: Firestore, auth: Auth, schoolId: string, name: string) {
-    await ensureUserAuthenticated(auth);
-    const categoriesCol = collection(db, dailyFeeCategoriesCollection);
-    const categoryData = { name, schoolId: schoolId };
-    await addDoc(categoriesCol, categoryData).catch(serverError => {
-        throw new FirestorePermissionError({ path: categoriesCol.path, operation: 'write', requestResourceData: categoryData });
-    });
-}
-
-export async function deleteDailyFeeCategory(db: Firestore, auth: Auth, categoryId: string) {
-    await ensureUserAuthenticated(auth);
-    const docRef = doc(db, dailyFeeCategoriesCollection, categoryId);
-    await deleteDoc(docRef).catch(serverError => {
-        throw new FirestorePermissionError({ path: docRef.path, operation: 'delete' });
-    });
-}
-
-export async function updateDailyFeeCategory(db: Firestore, auth: Auth, id: string, name: string) {
-    await ensureUserAuthenticated(auth);
-    const docRef = doc(db, dailyFeeCategoriesCollection, id);
-    await updateDoc(docRef, { name }).catch(serverError => {
-        throw new FirestorePermissionError({ path: docRef.path, operation: 'update', requestResourceData: { name } });
-    });
-}
 
 export const reconcileDailyFees = async (db: any, auth: any, studentId: string, periodId?: string, schoolId?: string) => {
     const user = auth.currentUser;
     if (!user) throw new Error("Authentication required");
 
-    const studentRef = getStudentDocRef(db, studentId, schoolId);
-    const studentSnap = await getDoc(studentRef);
-    if (!studentSnap.exists()) throw new Error("Student not found");
+    const { ref: studentRef, snap: studentSnap } = await resolveStudentDoc(db, studentId, schoolId);
 
     const student = studentSnap.data() as Student;
     let newLedger = [...(student.ledger || [])];
     let changed = false;
 
-    // Loop through attendance and check for missing fees
-    (student.attendance || []).forEach(record => {
-        if (!record.attended) return;
-        if (periodId && record.periodId !== periodId) return;
-
-        const date = record.date;
-
-        // 1. Check Feeding Fee
-        if (Number(student.dailyFeedingCost) > 0) {
-            const feedingExists = newLedger.some(t => t.date === date && t.category === 'feeding' && t.type === 'fee' && !t.isVoided);
-            if (!feedingExists) {
-                newLedger.push({
-                    id: `auto-feeding-${date}-${Date.now()}`,
-                    date: date,
-                    type: 'fee',
-                    category: 'feeding',
-                    description: 'Daily Feeding Fee',
-                    debit: Number(student.dailyFeedingCost),
-                    credit: 0,
-                    recordedBy: user.uid,
-                    periodId: record.periodId || periodId
-                });
-                changed = true;
-            }
-        }
-
-        // 2. Check Custom Daily Fees
-        (student.dailyFees || []).forEach(df => {
-            if (Number(df.rate) > 0) {
-                const feeExists = newLedger.some(t => t.date === date && t.category === df.categoryId && t.type === 'fee' && !t.isVoided);
-                if (!feeExists) {
-                    newLedger.push({
-                        id: `auto-df-${df.categoryId}-${date}-${Date.now()}`,
-                        date: date,
-                        type: 'fee',
-                        category: df.categoryId,
-                        description: `Daily Fee Deduction`,
-                        debit: Number(df.rate),
-                        credit: 0,
-                        recordedBy: user.uid,
-                        periodId: record.periodId || periodId
-                    });
-                    changed = true;
-                }
-            }
-        });
+    // --- LEDGER CLEANUP LOGIC ---
+    // Instead of adding missing fees, we now REMOVE all automated and historical accrual entries.
+    // This restores the ledger to only contain manual charges and payments, as daily fees
+    // are now calculated dynamically from attendance data.
+    const initialCount = newLedger.length;
+    newLedger = newLedger.filter(t => {
+        const id = t.id || "";
+        const isAutomated = id.startsWith('auto-feeding-') || id.startsWith('auto-df-');
+        const isMigration = id.startsWith('mig-fa-') || id.startsWith('mig-df-');
+        // Targeted removal of reported erroneous entries
+        const isErroneousBulk = (t.date === '2026-04-10' || t.date === '10/04/2026') && 
+                                (t.description?.includes('Feeding Fee') || t.category?.includes('Feeding Fee')) && 
+                                (Number(t.debit) === 1105 || Number(t.debit) === 2350 || Number(t.credit) === 1105 || Number(t.credit) === 2350);
+        return !(isAutomated || isMigration || isErroneousBulk);
     });
+
+    if (newLedger.length !== initialCount) {
+        changed = true;
+    }
 
     if (changed) {
         newLedger.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());

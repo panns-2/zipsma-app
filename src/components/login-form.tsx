@@ -10,6 +10,8 @@ import { CardContent, CardFooter } from '@/components/ui/card';
 import { useState } from 'react';
 import { Loader2, Users, Building } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useFirebase } from '@/firebase/client-provider';
+import { resolveStudentDoc } from '@/lib/data-store';
 
 interface LoginFormProps {
   schoolId?: string;
@@ -18,22 +20,38 @@ interface LoginFormProps {
 export default function LoginForm({ schoolId: initialSchoolId }: LoginFormProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const { db } = useFirebase();
   const [studentId, setStudentId] = useState('');
   const [schoolId, setSchoolId] = useState(initialSchoolId || '');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!studentId.trim() || !schoolId.trim()) {
       toast({
         title: 'Information Required',
-        description: 'Please enter both a School ID and a Student ID.',
+        description: 'Please enter both a School ID and a Student/Parent ID.',
         variant: 'destructive',
       });
       return;
     }
     setIsLoading(true);
-    router.push(`/dashboard?schoolId=${schoolId.trim().toUpperCase()}&id=${studentId.trim().toUpperCase()}`);
+    const trimmedId = studentId.trim().toUpperCase();
+    const trimmedSchoolId = schoolId.trim().toUpperCase();
+    
+    if (db) {
+        try {
+            await resolveStudentDoc(db, trimmedId, trimmedSchoolId);
+            // If it succeeds, it's a student ID
+            router.push(`/dashboard?schoolId=${trimmedSchoolId}&id=${trimmedId}`);
+        } catch (e) {
+            // Record not found as student. Route to main dashboard (which handles parent/family view)
+            router.push(`/dashboard?schoolId=${trimmedSchoolId}&id=${trimmedId}`);
+        }
+    } else {
+        // Fallback without DB: route to main dashboard
+        router.push(`/dashboard?schoolId=${trimmedSchoolId}&id=${trimmedId}`);
+    }
   };
 
   return (

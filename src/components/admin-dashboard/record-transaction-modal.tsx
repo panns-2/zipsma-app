@@ -27,8 +27,11 @@ interface RecordTransactionModalProps {
     auth: any; // Auth
     onSuccess: () => void;
     initialType?: 'fee' | 'payment' | 'adjustment';
+    initialCategoryId?: string;
     transactionToEdit?: LedgerTransaction | null;
+    filterType?: 'main' | 'daily' | 'all';
 }
+
 
 export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
     isOpen,
@@ -41,10 +44,19 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
     auth,
     onSuccess,
     initialType = 'payment',
-    transactionToEdit
+    initialCategoryId,
+    transactionToEdit,
+    filterType = 'all'
 }) => {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const filteredCategories = React.useMemo(() => {
+        if (filterType === 'daily') return feeCategories.filter(c => c.isDaily);
+        if (filterType === 'main') return feeCategories.filter(c => !c.isDaily);
+        return feeCategories;
+    }, [feeCategories, filterType]);
+    
     const [form, setForm] = useState({
         type: initialType as 'fee' | 'payment' | 'adjustment',
         category: 'General',
@@ -56,9 +68,10 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
     useEffect(() => {
         if (isOpen) {
             if (transactionToEdit) {
+                const resolvedCategory = feeCategories.find(c => c.id === transactionToEdit.category || c.name === transactionToEdit.category);
                 setForm({
                     type: transactionToEdit.debit > 0 ? 'fee' : 'payment',
-                    category: transactionToEdit.category as string,
+                    category: resolvedCategory ? resolvedCategory.id : (transactionToEdit.category as string || 'General'),
                     amount: (transactionToEdit.debit || transactionToEdit.credit).toString(),
                     date: transactionToEdit.date,
                     periodId: transactionToEdit.periodId || ''
@@ -67,11 +80,12 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
                 setForm(prev => ({
                     ...prev,
                     type: initialType,
-                    periodId: selectedPeriodId || prev.periodId || (academicPeriods[0]?.id || '')
+                    periodId: selectedPeriodId || prev.periodId || (academicPeriods[0]?.id || ''),
+                    category: initialCategoryId || (filteredCategories.length > 0 ? filteredCategories[0].id : 'General')
                 }));
             }
         }
-    }, [isOpen, initialType, selectedPeriodId, academicPeriods, transactionToEdit]);
+    }, [isOpen, initialType, selectedPeriodId, academicPeriods, transactionToEdit, filteredCategories]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -85,7 +99,8 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
 
             const transactionData: any = {
                 date: form.date,
-                category: form.category,
+                category: categoryName, // Store the human-readable name
+                categoryId: selectedCategory?.id || form.category, // Store the strict ID reference
                 description: categoryName || 'Transaction',
                 debit: form.type === 'fee' ? amountValue : 0,
                 credit: form.type === 'payment' ? amountValue : 0,
@@ -102,17 +117,19 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
                 }
             }
 
+            console.log("[RecordTransactionModal] Starting submission...", transactionData);
             if (transactionToEdit) {
-                await updateLedgerTransaction(db, auth, student.studentId, transactionToEdit.id, transactionData, student.schoolId);
+                await updateLedgerTransaction(db, auth, student.id || student.studentId, transactionToEdit.id, transactionData, student.schoolId);
                 toast({ title: "Transaction Updated", description: "The transaction has been updated in the ledger." });
             } else {
-                await postLedgerTransaction(db, auth, student.studentId, transactionData, student.schoolId);
+                await postLedgerTransaction(db, auth, student.id || student.studentId, transactionData, student.schoolId);
                 toast({ title: "Transaction Recorded", description: "The transaction has been added to the ledger." });
             }
             onSuccess();
             onClose();
             setForm(prev => ({ ...prev, amount: '' }));
         } catch (error: any) {
+            console.error("[RecordTransactionModal] Submission Error:", error);
             toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
             setIsSubmitting(false);
@@ -125,20 +142,25 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl font-jakarta">
                 <DialogHeader className={cn(
-                    "p-8",
+                    "p-8 transition-colors duration-300",
                     form.type === 'payment' ? "bg-emerald-600 text-white" : "bg-primary text-primary-foreground"
                 )}>
-                    <DialogTitle className="text-2xl font-bold flex items-center gap-3">
-                        {form.type === 'payment' ? <Banknote className="w-8 h-8" /> : <FilePlus className="w-8 h-8" />}
-                        {form.type === 'payment' ? 'Record Payment' : form.type === 'fee' ? 'Add Fee Charge' : 'New Transaction'}
-                    </DialogTitle>
-                    <DialogDescription className={cn(
-                        "font-medium",
-                        form.type === 'payment' ? "text-emerald-50" : "text-primary-foreground/80"
-                    )}>
-                        {form.type === 'payment' ? 'Record money received from' : 'Add a new fee for'} {student.name}.
-                    </DialogDescription>
+                    <div className="flex justify-between items-start">
+                        <div className="space-y-1">
+                            <DialogTitle className="text-2xl font-bold flex items-center gap-3">
+                                {form.type === 'payment' ? <Banknote className="w-8 h-8" /> : <FilePlus className="w-8 h-8" />}
+                                {transactionToEdit ? 'Edit Transaction' : form.type === 'payment' ? 'Record Payment' : form.type === 'fee' ? 'Add Fee Charge' : 'New Transaction'}
+                            </DialogTitle>
+                            <DialogDescription className={cn(
+                                "font-medium",
+                                form.type === 'payment' ? "text-emerald-50" : "text-primary-foreground/80"
+                            )}>
+                                {form.type === 'payment' ? 'Record money received from' : 'Add a new fee for'} {student.name}.
+                            </DialogDescription>
+                        </div>
+                    </div>
                 </DialogHeader>
+
                 <form onSubmit={handleSubmit} className="p-8 space-y-6">
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -161,11 +183,13 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
                                     <SelectValue placeholder="Select Category" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {feeCategories.length === 0 ? (
-                                        <SelectItem value="none" disabled>No Categories Setup</SelectItem>
+                                    {filteredCategories.length === 0 ? (
+                                        <SelectItem value="none" disabled>No categories found</SelectItem>
                                     ) : (
-                                        feeCategories.map(cat => (
-                                            <SelectItem key={cat.id} value={cat.id} className="font-bold">{cat.name}</SelectItem>
+                                        filteredCategories.map(cat => (
+                                            <SelectItem key={cat.id} value={cat.id} className="font-bold">
+                                                {cat.name} {cat.isDaily ? '(Daily)' : ''}
+                                            </SelectItem>
                                         ))
                                     )}
                                 </SelectContent>
@@ -184,11 +208,11 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
                                 required 
                                 className="h-12 border-primary/20 shadow-sm bg-muted/30 text-numeric text-lg font-black"
                             />
-                            {form.type === 'fee' && (student.feeDiscount || 0) > 0 && (
+                            {form.type === 'fee' && (student.feeDiscount || 0) > 0 && !feeCategories.find(c => c.id === form.category)?.isDaily && (
                                 <div className="mt-2 p-2 bg-primary/5 rounded-lg border border-primary/20 flex items-center justify-between animate-in fade-in slide-in-from-top-1 duration-300">
                                     <div className="flex flex-col">
-                                        <span className="text-[10px] text-primary font-black uppercase tracking-tighter">Student Discount Available</span>
-                                        <span className="text-xs font-bold text-primary/80">{student.feeDiscount}% off tuition/fees</span>
+                                        <span className="text-[10px] text-primary font-black uppercase tracking-tighter">Discount Available</span>
+                                        <span className="text-xs font-bold text-primary/80">{student.feeDiscount}% reduction</span>
                                     </div>
                                     <Button 
                                         type="button"
@@ -197,47 +221,29 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
                                             const base = Number(form.amount) || 0;
                                             const discounted = base * (1 - ((student.feeDiscount || 0) / 100));
                                             setForm({...form, amount: discounted.toFixed(2)});
-                                            toast({
-                                                title: "Discount Applied",
-                                                description: `${student.feeDiscount}% discount calculated manually.`,
-                                            });
+                                            toast({ title: "Discount Applied", description: `${student.feeDiscount}% discount applied.` });
                                         }}
-                                        className="h-7 text-[10px] font-black uppercase tracking-widest bg-primary hover:bg-primary/90 text-white shadow-sm"
+                                        className="h-7 text-[10px] font-black bg-primary text-white"
                                     >
                                         Apply
                                     </Button>
                                 </div>
                             )}
-                            {form.type === 'adjustment' && <p className="text-[10px] text-muted-foreground font-bold italic mt-1">Negative for credit adjustment.</p>}
                         </div>
                         <div className="space-y-2">
                             <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Date</Label>
                             <Popover>
                                 <PopoverTrigger asChild>
-                                    <Button
-                                        variant={"outline"}
-                                        className={cn(
-                                            "w-full h-12 justify-start text-left font-medium border-primary/20 shadow-sm bg-muted/30",
-                                            !form.date && "text-muted-foreground"
-                                        )}
-                                    >
+                                    <Button variant={"outline"} className="w-full h-12 justify-start text-left border-primary/20 bg-muted/30">
                                         <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {form.date ? form.date.split('-').reverse().join('/') : <span>Pick a date</span>}
+                                        {form.date ? form.date.split('-').reverse().join('/') : <span>Pick date</span>}
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0 border-primary/20 shadow-xl" align="start">
+                                <PopoverContent className="w-auto p-0" align="start">
                                     <Calendar
                                         mode="single"
                                         selected={form.date ? new Date(form.date + 'T00:00:00') : undefined}
-                                        onSelect={(date) => {
-                                            if (date) {
-                                                const year = date.getFullYear();
-                                                const month = String(date.getMonth() + 1).padStart(2, '0');
-                                                const day = String(date.getDate()).padStart(2, '0');
-                                                setForm({ ...form, date: `${year}-${month}-${day}` });
-                                            }
-                                        }}
-                                        initialFocus
+                                        onSelect={(date) => date && setForm({ ...form, date: date.toISOString().split('T')[0] })}
                                     />
                                 </PopoverContent>
                             </Popover>
@@ -251,33 +257,20 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
                                 <SelectValue placeholder="Select Term" />
                             </SelectTrigger>
                             <SelectContent>
-                                {academicPeriods.length === 0 ? (
-                                    <SelectItem value="none" disabled>No Terms Setup</SelectItem>
-                                ) : (
-                                    academicPeriods.map(p => (
-                                        <SelectItem key={p.id} value={p.id} className="font-bold">
-                                            {p.year} - {p.term}
-                                        </SelectItem>
-                                    ))
-                                )}
+                                {academicPeriods.map(p => (
+                                    <SelectItem key={p.id} value={p.id} className="font-bold">{p.year} - {p.term}</SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                     </div>
 
                     <div className="flex gap-3 pt-4">
-                        <Button 
-                            type="button" 
-                            variant="ghost" 
-                            onClick={onClose} 
-                            className="flex-1 h-12 rounded-xl font-bold uppercase tracking-widest text-muted-foreground"
-                        >
-                            Cancel
-                        </Button>
+                        <Button type="button" variant="ghost" onClick={onClose} className="flex-1 h-12 rounded-xl font-bold uppercase text-muted-foreground">Cancel</Button>
                         <Button 
                             type="submit" 
                             disabled={isSubmitting}
                             className={cn(
-                                "flex-1 h-12 rounded-xl font-bold uppercase tracking-widest text-white shadow-lg transition-all",
+                                "flex-1 h-12 rounded-xl font-bold uppercase text-white shadow-lg",
                                 form.type === 'payment' ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200" : "bg-primary hover:bg-primary/90 shadow-primary/20"
                             )}
                         >

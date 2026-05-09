@@ -10,25 +10,25 @@ import { motion } from "framer-motion";
 interface AdminSidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  feesActiveSubTab?: string;
-  setFeesActiveSubTab?: (tab: string) => void;
   handleLogout: () => void;
   schoolName?: string;
   schoolId?: string;
   logoUrl?: string;
   isMobile?: boolean;
+  feesActiveSubTab?: string;
+  setFeesActiveSubTab?: (tab: string) => void;
 }
 
 export function AdminSidebar({ 
     activeTab, 
     setActiveTab, 
-    feesActiveSubTab,
-    setFeesActiveSubTab,
     handleLogout, 
     schoolName, 
     schoolId, 
     logoUrl,
     isMobile = false,
+    feesActiveSubTab,
+    setFeesActiveSubTab,
 }: AdminSidebarProps) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
@@ -39,15 +39,10 @@ export function AdminSidebar({
     { id: 'academic-reports', label: 'Academic Reports', icon: Book },
     { id: 'calendar', label: 'School Calendar', icon: Calendar },
     { id: 'communication', label: 'Announcements', icon: Send },
-    { 
-      id: 'fees', 
-      label: 'Fees Management', 
-      icon: Wallet,
-      subItems: [
-        { id: 'records', label: 'Fee Category Records' },
-        { id: 'daily', label: 'Daily Fee Category' }
-      ]
-    },
+    { id: 'fees', label: 'Fees Management', icon: Wallet, subItems: [
+        { id: 'main', label: 'Main School Fees' },
+        { id: 'daily', label: 'Daily Fee' }
+    ]},
     { id: 'finances', label: 'Finances', icon: Wallet },
     { id: 'archive', label: 'Archive', icon: Archive },
     { id: 'settings', label: 'Settings', icon: Settings },

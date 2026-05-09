@@ -8,9 +8,21 @@ import Header from '@/components/header';
 import StudentProfile from '@/components/student-profile';
 import ContactBar from '@/components/contact-bar';
 import { Button } from '@/components/ui/button';
-import { Phone, Mail, MessageCircle, Frown, Loader2, Megaphone, CalendarDays, CalendarIcon, RefreshCw, Notebook, BookCopy, PartyPopper, Pin, Bus, Bot, Sparkles, GraduationCap, HelpCircle, FileText, Copy, FileQuestion, CheckCircle, XCircle, Landmark, Info, Smartphone, UtensilsCrossed, History, Camera, Wallet, ShieldCheck, Banknote, UserCircle, TrendingDown, CheckCheck } from 'lucide-react';
+import { 
+    Wallet, Megaphone, CalendarDays, Eye, Phone, Mail, MessageCircle,
+    ChevronRight, ArrowLeft, Users, UserCircle, LayoutDashboard,
+    Calendar as CalendarIcon, Info, Frown, Loader2, Copy, FileQuestion, CheckCircle, XCircle, Landmark, Smartphone, UtensilsCrossed, History, Camera, ShieldCheck, Banknote, TrendingDown, CheckCheck, RefreshCw, Notebook, BookCopy, PartyPopper, Pin, Bus, Bot, Sparkles, GraduationCap, HelpCircle, FileText
+} from 'lucide-react';
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { 
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Student, getStudentById, getStudentsByParentId, Announcement, getAnnouncementsForStudent, CalendarEvent, getCalendarEvents, Homework, getHomeworkForClass, School, getSchoolDetails, signOutUser, getAcademicPeriods, AcademicPeriod, updateStudentDetails } from '@/lib/data-store';
+import { Student, getStudentById, getStudentsByParentId, Announcement, getAnnouncementsForStudent, CalendarEvent, getCalendarEvents, Homework, getHomeworkForClass, School, getSchoolDetails, signOutUser, getAcademicPeriods, AcademicPeriod, updateStudentDetails, getFeeCategories, FeeCategory, isDailyTransaction, LedgerTransaction } from '@/lib/data-store';
 import { explainConcept, summarizeTopic, generateQuiz, QuizQuestion, ExplainConceptInput } from '@/ai/flows/student-assistant-flow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AttendanceCard } from '@/components/attendance-card';
@@ -21,7 +33,6 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useIdleTimeout } from '@/hooks/use-idle-timeout';
 import { useToast } from '@/hooks/use-toast';
 import ReactMarkdown from 'react-markdown';
-import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
@@ -37,8 +48,58 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 
-
+// Child Switcher Component for persistent navigation
+const ChildSwitcher = ({ children, activeId, onSelect, onBackToOverview }: { 
+    children: Student[], 
+    activeId: string | null, 
+    onSelect: (id: string, child: Student) => void,
+    onBackToOverview: () => void
+}) => {
+    return (
+        <div className="flex flex-wrap items-center gap-3 mb-8 p-3 bg-white/60 backdrop-blur-md rounded-2xl border border-white/40 shadow-sm overflow-x-auto no-scrollbar">
+            <button
+                onClick={onBackToOverview}
+                className={cn(
+                    "flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all font-black text-[10px] uppercase tracking-widest whitespace-nowrap border-2",
+                    !activeId 
+                        ? "bg-primary text-white border-primary shadow-lg shadow-primary/20" 
+                        : "bg-white text-muted-foreground border-transparent hover:bg-primary/5 hover:text-primary"
+                )}
+            >
+                <LayoutDashboard className="w-3.5 h-3.5" />
+                Family Overview
+            </button>
+            <div className="h-6 w-px bg-muted mx-1" />
+            {children.map(child => (
+                <button
+                    key={child.studentId}
+                    onClick={() => onSelect(child.studentId, child)}
+                    className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-xs whitespace-nowrap border-2",
+                        activeId === child.studentId 
+                            ? "bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-105" 
+                            : "bg-white text-muted-foreground border-transparent hover:bg-primary/5 hover:text-primary"
+                    )}
+                >
+                    <Avatar className="w-6 h-6 border border-current/10">
+                        <AvatarImage src={child.profilePicture} />
+                        <AvatarFallback className="text-[10px]">{child.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    {child.name.split(' ')[0]}
+                </button>
+            ))}
+        </div>
+    );
+};
 
 const FeeRow = ({ label, value, className, currency = 'GH¢' }: { label: string, value: number, className?: string, currency?: string }) => (
   <div className="flex justify-between items-center py-2 border-b border-border/50">
@@ -93,10 +154,13 @@ function DashboardContent() {
     const [notFound, setNotFound] = useState(false);
 
     const [familyChildren, setFamilyChildren] = useState<Student[]>([]);
+    const [familyAnnouncements, setFamilyAnnouncements] = useState<Announcement[]>([]);
     const [isFamilyView, setIsFamilyView] = useState(false);
     const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
+    const [familyActiveTab, setFamilyActiveTab] = useState<'overview' | 'children' | 'calendar'>('overview');
     const [academicPeriods, setAcademicPeriods] = useState<AcademicPeriod[]>([]);
     const [selectedPeriodId, setSelectedPeriodId] = useState<string>('');
+    const [feeCategories, setFeeCategories] = useState<FeeCategory[]>([]);
 
     
     // AI Assistant State
@@ -172,6 +236,9 @@ function DashboardContent() {
             if (current) setSelectedPeriodId(current.id);
             else if (periods.length > 0) setSelectedPeriodId(periods[0].id);
 
+            const categories = await getFeeCategories(db, schoolId);
+            setFeeCategories(categories);
+
 
             const student = await getStudentById(db, schoolId, urlId);
             if (student) {
@@ -183,6 +250,17 @@ function DashboardContent() {
                 if (children.length > 0) {
                     setFamilyChildren(children);
                     setIsFamilyView(true);
+                    
+                    // Fetch family announcements (all school + all children)
+                    const announcementPromises = children.map(c => getAnnouncementsForStudent(db, schoolId, c.studentId));
+                    const results = await Promise.all(announcementPromises);
+                    const merged = Array.from(new Set(results.flat().map(a => a.id)))
+                        .map(id => results.flat().find(a => a.id === id)!)
+                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                    setFamilyAnnouncements(merged);
+
+                    const events = await getCalendarEvents(db, schoolId);
+                    setCalendarEvents(events);
                 } else {
                     setNotFound(true);
                 }
@@ -237,31 +315,134 @@ function DashboardContent() {
     };
 
 
-    const totalOutstanding = useMemo(() => {
-        if (!studentData) return 0;
-        const fullLedger = studentData.ledger || [];
-        const currentTransactions = fullLedger.filter(t => {
-            if (t.isVoided) return false;
-            if (currentPeriod && currentPeriod.startDate && currentPeriod.endDate) {
-                return isDateInPeriod(t.date, currentPeriod);
+    const financialData = useMemo(() => {
+        if (!studentData) return { 
+            totalOutstanding: 0, 
+            balanceBF: 0, 
+            feeBreakdown: {} as Record<string, number>,
+            mainFeesBalance: 0,
+            dailyFeesBalance: 0,
+            dailyFeeEstimate: 0,
+            dailyAccrued: 0
+        };
+        
+        const allFeeCategories = [...feeCategories];
+        if (!allFeeCategories.some(c => c.id === 'feeding' || c.name === 'Feeding Fee')) {
+            allFeeCategories.push({ id: 'feeding', name: 'Feeding Fee', schoolId: schoolId || '', isDaily: true } as FeeCategory);
+        }
+
+        const fullLedger = (studentData.ledger || []).filter(t => !t.isVoided);
+        
+        // Match Admin Portal's Period Sorting and Indexing
+        // Admin reverses academicPeriods then finds index
+        const sortedPeriodsForIndex = [...academicPeriods].reverse();
+        const currentPeriodIndex = sortedPeriodsForIndex.findIndex(p => p.id === selectedPeriodId);
+
+        // Split ledger into Daily and Main
+        const dailyLedger = fullLedger.filter(t => isDailyTransaction(t, allFeeCategories));
+        const mainLedger = fullLedger.filter(t => !isDailyTransaction(t, allFeeCategories));
+
+        const getPeriodBalances = (ledger: LedgerTransaction[]) => {
+            // Match Admin's Arrears logic (lines 1524-1530 in admin page.tsx)
+            const prevTransactions = ledger.filter(t => {
+                if (!t.periodId) return false; // Admin excludes transactions without periodId
+                const tPeriodIndex = sortedPeriodsForIndex.findIndex(p => p.id === t.periodId);
+                return tPeriodIndex < currentPeriodIndex && t.periodId !== selectedPeriodId;
+            });
+
+            const bf = prevTransactions.reduce((sum, t) => sum + (Number(t.debit) || 0) - (Number(t.credit) || 0), 0);
+            
+            // Match Admin's Current Term logic (line 1532 in admin page.tsx)
+            const currentTransactions = ledger.filter(t => !selectedPeriodId || t.periodId === selectedPeriodId);
+
+            const billed = currentTransactions.reduce((sum, t) => sum + (Number(t.debit) || 0), 0);
+            const paid = currentTransactions.reduce((sum, t) => sum + (Number(t.credit) || 0), 0);
+            
+            // Note: Admin's total balance calculation (lines 1539-1544)
+            // totals.billed = (bf > 0 ? bf : 0) + sum(debit)
+            // totals.paid = (bf < 0 ? abs(bf) : 0) + sum(credit)
+            // balance = totals.billed - totals.paid
+            const adminBilled = (bf > 0 ? bf : 0) + billed;
+            const adminPaid = (bf < 0 ? Math.abs(bf) : 0) + paid;
+            const balance = adminBilled - adminPaid;
+
+            return { bf, billed, paid, balance, currentTransactions };
+        };
+
+        const dailyData = getPeriodBalances(dailyLedger);
+        const mainData = getPeriodBalances(mainLedger);
+
+        const breakdown = [...dailyData.currentTransactions, ...mainData.currentTransactions]
+            .filter(t => t.debit > 0)
+            .reduce((acc: Record<string, number>, t) => {
+                let displayName = t.description;
+                if (t.category) {
+                    if (t.category === 'feeding' || t.category === 'feeding fee') {
+                        displayName = 'Feeding Fee';
+                    } else if (t.category !== 'general' && t.category !== 'transportation') {
+                        const cat = allFeeCategories.find(c => c.id === t.category);
+                        if (cat) displayName = cat.name;
+                    }
+                }
+                acc[displayName] = (acc[displayName] || 0) + t.debit;
+                return acc;
+            }, {});
+
+        // Daily Fee Estimate logic (Term Estimate, not Attendance-based)
+        let termDays = 0;
+        if (currentPeriod?.startDate && currentPeriod?.endDate) {
+            const start = new Date(currentPeriod.startDate);
+            const end = new Date(currentPeriod.endDate);
+            let days = 0;
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                if (d.getDay() !== 0 && d.getDay() !== 6) days++;
             }
-            return t.periodId === selectedPeriodId;
-        });
-        const prevTransactions = fullLedger.filter(t => {
-            if (t.isVoided) return false;
-            if (currentPeriod && currentPeriod.startDate) {
-                const tDate = new Date(t.date + "T00:00:00");
-                const periodStart = new Date(currentPeriod.startDate + "T00:00:00");
-                return tDate < periodStart;
-            }
-            return t.periodId !== selectedPeriodId;
+            termDays = days;
+        }
+
+        // Identify the "real" feeding category if it exists in the database
+        const dynamicFeedingCat = allFeeCategories.find(c => c.isDaily && (c.name.toLowerCase().trim() === 'feeding fee' || c.name.toLowerCase().trim() === 'feeding'));
+        const dynamicFeedingId = dynamicFeedingCat?.id.toLowerCase().trim();
+
+        let dailyFeeEstimate = 0;
+        let dailyAccrued = 0;
+        const daysPresent = (studentData.attendance || []).filter(a => a.attended && (!selectedPeriodId || a.periodId === selectedPeriodId)).length;
+
+        // 1. Process Feeding Fee specifically using studentData.dailyFeedingCost (Canonical Source)
+        dailyFeeEstimate += (Number(studentData.dailyFeedingCost) || 0) * termDays;
+        dailyAccrued += (Number(studentData.dailyFeedingCost) || 0) * daysPresent;
+
+        // 2. Process other dynamic daily fee categories using the official category list
+        // This matches Admin deduplication logic
+        allFeeCategories.filter(c => c.isDaily).forEach(cat => {
+            const normName = cat.name.toLowerCase().trim();
+            const normId = cat.id.toLowerCase().trim();
+            
+            // Skip if it's a variant of the main feeding fee (already processed)
+            if (normName === 'feeding fee' || normName === 'feeding' || normId === 'feeding' || (dynamicFeedingId && normId === dynamicFeedingId)) return;
+
+            const studentRate = (studentData.dailyFees || []).find(f => 
+                (f.categoryId && f.categoryId.toLowerCase().trim() === normId)
+            )?.rate || 0;
+
+            dailyFeeEstimate += Number(studentRate) * termDays;
+            dailyAccrued += Number(studentRate) * daysPresent;
         });
 
-        const bf = prevTransactions.reduce((sum, t) => sum + (t.debit - t.credit), 0);
-        const termBilled = currentTransactions.reduce((sum, t) => sum + t.debit, 0);
-        const termPaid = currentTransactions.reduce((sum, t) => sum + t.credit, 0);
-        return bf + termBilled - termPaid;
-    }, [studentData, currentPeriod, selectedPeriodId]);
+        const mainFeesBalance = mainData.balance;
+        const dailyFeesBalance = dailyData.balance;
+        const totalOutstanding = mainFeesBalance + dailyAccrued;
+
+        return { 
+            totalOutstanding,
+            balanceBF: mainData.bf + dailyData.bf,
+            feeBreakdown: breakdown,
+            mainFeesBalance,
+            dailyFeesBalance,
+            dailyFeeEstimate,
+            dailyAccrued
+        };
+    }, [studentData, currentPeriod, selectedPeriodId, feeCategories, schoolId, academicPeriods]);
 
     const attendanceSummary = useMemo(() => {
         if (!studentData || !studentData.attendance || studentData.attendance.length === 0) return { present: 0, total: 0, rate: 0 };
@@ -415,45 +596,63 @@ function DashboardContent() {
 
     if (isFamilyView && !studentData) {
         let totalFamilyArrears = 0;
+        const today = new Date().toISOString().split('T')[0];
+        const currentPeriod = academicPeriods.find(p => p.id === selectedPeriodId);
         
-        const childrenWithBalances = familyChildren.map(child => {
-            const currentPeriod = academicPeriods.find(p => p.id === selectedPeriodId);
-            const isDateInPeriod = (date: string, period: AcademicPeriod) => {
-                if (!period.startDate || !period.endDate) return false;
-                const d = new Date(date + "T00:00:00");
-                const start = new Date(period.startDate + "T00:00:00");
-                const end = new Date(period.endDate + "T23:59:59");
-                return d >= start && d <= end;
+        const sortedPeriodsForIndex = [...academicPeriods].reverse();
+        const currentPeriodIndex = sortedPeriodsForIndex.findIndex(p => p.id === selectedPeriodId);
+
+        const childrenWithArrears = familyChildren.map(child => {
+            const getBalanceForChild = (student: Student) => {
+                const ledger = student.ledger || [];
+                const mainLedger = ledger.filter(t => !t.isVoided && !isDailyTransaction(t, feeCategories));
+                
+                // Match Admin's Arrears logic (strictly previous periods)
+                const bfTransactions = mainLedger.filter(t => {
+                    if (!t.periodId) return false;
+                    const tPeriodIndex = sortedPeriodsForIndex.findIndex(p => p.id === t.periodId);
+                    return tPeriodIndex < currentPeriodIndex && t.periodId !== selectedPeriodId;
+                });
+
+                const bf = bfTransactions.reduce((sum, t) => sum + (Number(t.debit) || 0) - (Number(t.credit) || 0), 0);
+
+                // Match Admin's Current Term logic (strictly current period)
+                const currentTransactions = mainLedger.filter(t => t.periodId === selectedPeriodId);
+                const billed = currentTransactions.reduce((sum, t) => sum + (Number(t.debit) || 0), 0);
+                const paid = currentTransactions.reduce((sum, t) => sum + (Number(t.credit) || 0), 0);
+                
+                const mainBalance = (bf > 0 ? bf : 0) + billed - ((bf < 0 ? Math.abs(bf) : 0) + paid);
+
+                // Daily Accrued based on attendance
+                const daysPresent = (student.attendance || []).filter(a => a.attended && (!selectedPeriodId || a.periodId === selectedPeriodId)).length;
+                const feedingRate = Number(student.dailyFeedingCost) || 0;
+                
+                const dynamicFeedingCat = feeCategories.find(c => c.isDaily && (c.name.toLowerCase().trim() === 'feeding fee' || c.name.toLowerCase().trim() === 'feeding'));
+                const dynamicFeedingId = dynamicFeedingCat?.id.toLowerCase().trim();
+
+                let otherDailyRates = 0;
+                feeCategories.filter(c => c.isDaily).forEach(cat => {
+                    const normName = cat.name.toLowerCase().trim();
+                    const normId = cat.id.toLowerCase().trim();
+                    if (normName === 'feeding fee' || normName === 'feeding' || normId === 'feeding' || (dynamicFeedingId && normId === dynamicFeedingId)) return;
+
+                    const rate = (student.dailyFees || []).find(f => f.categoryId && f.categoryId.toLowerCase().trim() === normId)?.rate || 0;
+                    otherDailyRates += Number(rate);
+                });
+
+                const dailyAccrued = (feedingRate + otherDailyRates) * daysPresent;
+                return mainBalance + dailyAccrued;
             };
 
-            const fullLedger = child.ledger || [];
-            const currentTransactions = fullLedger.filter(t => {
-                if (t.isVoided) return false;
-                if (currentPeriod && currentPeriod.startDate && currentPeriod.endDate) {
-                    return isDateInPeriod(t.date, currentPeriod);
-                }
-                return t.periodId === selectedPeriodId;
-            });
-            const prevTransactions = fullLedger.filter(t => {
-                if (t.isVoided) return false;
-                if (currentPeriod && currentPeriod.startDate) {
-                    const tDate = new Date(t.date + "T00:00:00");
-                    const periodStart = new Date(currentPeriod.startDate + "T00:00:00");
-                    return tDate < periodStart;
-                }
-                return t.periodId !== selectedPeriodId;
-            });
-
-            const bf = prevTransactions.reduce((sum, t) => sum + (t.debit - t.credit), 0);
-            const termBilled = currentTransactions.reduce((sum, t) => sum + t.debit, 0);
-            const termPaid = currentTransactions.reduce((sum, t) => sum + t.credit, 0);
-            const studentArrears = bf + termBilled - termPaid;
-            
+            const studentArrears = getBalanceForChild(child);
             totalFamilyArrears += (studentArrears > 0 ? studentArrears : 0);
             
+            const attendanceToday = child.attendance?.find(a => a.date === today);
+
             return {
                 ...child,
-                studentArrears
+                studentArrears,
+                attendanceToday: attendanceToday ? (attendanceToday.attended ? 'Present' : 'Absent') : 'Not Marked'
             };
         });
 
@@ -466,44 +665,279 @@ function DashboardContent() {
                     schoolLogoUrl={schoolDetails?.logoUrl}
                 />
                 <main className="container mx-auto px-4 py-8 pb-24 md:pb-8">
-                    <div className="mb-4">
-                        <h2 className="text-2xl font-bold text-primary mb-6">Your Children</h2>
-                        
-                        <div className="mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <div className="p-4 bg-primary/10 border border-primary/30 rounded-lg shadow-sm flex flex-col justify-center">
-                                <div className="text-sm font-semibold text-muted-foreground mb-1">Total Family Balance Due</div>
-                                <div className={cn("text-2xl font-bold", totalFamilyArrears > 0 ? "text-destructive" : "text-success")}>GH¢{totalFamilyArrears.toFixed(2)}</div>
+                    <Tabs value={familyActiveTab} onValueChange={(val: any) => setFamilyActiveTab(val)} className="w-full">
+                        <TabsList className="grid w-full grid-cols-3 h-auto mb-8 bg-white/50 backdrop-blur-sm p-1 rounded-2xl border border-white/20">
+                            <TabsTrigger value="overview" className="rounded-xl py-3 font-bold text-xs data-[state=active]:bg-primary data-[state=active]:text-white transition-all">Family Overview</TabsTrigger>
+                            <TabsTrigger value="children" className="rounded-xl py-3 font-bold text-xs data-[state=active]:bg-primary data-[state=active]:text-white transition-all">Your Children</TabsTrigger>
+                            <TabsTrigger value="calendar" className="rounded-xl py-3 font-bold text-xs data-[state=active]:bg-primary data-[state=active]:text-white transition-all">School Calendar</TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="overview" className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            {/* 1. Quick Stats Row */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <Card className="border-none shadow-xl bg-gradient-to-br from-primary/10 to-primary/5">
+                                    <CardHeader className="pb-2">
+                                        <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-primary/60">Total Family Arrears</CardDescription>
+                                        <CardTitle className={cn("text-2xl font-black", totalFamilyArrears > 0 ? "text-destructive" : "text-emerald-600")}>
+                                            GH¢{totalFamilyArrears.toFixed(2)}
+                                        </CardTitle>
+                                    </CardHeader>
+                                </Card>
+                                <Card className="border-none shadow-xl bg-white">
+                                    <CardHeader className="pb-2">
+                                        <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Children Registered</CardDescription>
+                                        <CardTitle className="text-2xl font-black text-primary">{familyChildren.length}</CardTitle>
+                                    </CardHeader>
+                                </Card>
+                                <Card className="border-none shadow-xl bg-white">
+                                    <CardHeader className="pb-2">
+                                        <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Today's Attendance</CardDescription>
+                                        <CardTitle className="text-2xl font-black text-emerald-600">
+                                            {childrenWithArrears.filter(c => c.attendanceToday === 'Present').length} / {familyChildren.length}
+                                        </CardTitle>
+                                    </CardHeader>
+                                </Card>
+                                <Card className="border-none shadow-xl bg-white">
+                                    <CardHeader className="pb-2">
+                                        <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Active Term</CardDescription>
+                                        <CardTitle className="text-sm font-black text-primary truncate">
+                                            {currentPeriod ? `${currentPeriod.year} - ${currentPeriod.term}` : 'N/A'}
+                                        </CardTitle>
+                                    </CardHeader>
+                                </Card>
                             </div>
-                        </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {childrenWithBalances.map(child => (
-                            <Card key={child.studentId} className="cursor-pointer border-t-4 border-t-primary hover:shadow-lg hover:-translate-y-1 transition-all duration-300" onClick={() => { setActiveStudentId(child.studentId); fetchStudentData(child.studentId, child); }}>
-                                <CardHeader className="flex flex-row items-center gap-4">
-                                    {child.profilePicture ? (
-                                        <img src={child.profilePicture} alt={child.name} className="w-16 h-16 rounded-full object-cover border border-secondary" />
-                                    ) : (
-                                        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xl">
-                                            {child.name.charAt(0)}
+
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                {/* Left Side: Financial & Attendance List */}
+                                <div className="lg:col-span-2 space-y-6">
+                                    <Card className="border-none shadow-2xl overflow-hidden rounded-2xl bg-white">
+                                        <CardHeader className="bg-primary/5 border-b border-primary/10 py-4">
+                                            <CardTitle className="text-lg font-bold text-primary flex items-center gap-2">
+                                                <Wallet className="w-5 h-5" /> Family Summary
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="p-0">
+                                            <Table>
+                                                <TableHeader className="bg-muted/30">
+                                                    <TableRow>
+                                                        <TableHead className="text-[10px] font-black uppercase tracking-tighter">Child</TableHead>
+                                                        <TableHead className="text-[10px] font-black uppercase tracking-tighter">Class</TableHead>
+                                                        <TableHead className="text-[10px] font-black uppercase tracking-tighter">Today</TableHead>
+                                                        <TableHead className="text-right text-[10px] font-black uppercase tracking-tighter">Balance</TableHead>
+                                                        <TableHead className="w-10"></TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {childrenWithArrears.map(child => (
+                                                        <TableRow key={child.studentId} className="group hover:bg-primary/5 transition-colors cursor-pointer" onClick={() => { setActiveStudentId(child.studentId); fetchStudentData(child.studentId, child); }}>
+                                                            <TableCell>
+                                                                <div className="flex items-center gap-3">
+                                                                    <Avatar className="w-8 h-8 border border-primary/10">
+                                                                        <AvatarImage src={child.profilePicture} />
+                                                                        <AvatarFallback className="text-[10px] font-bold">{child.name.charAt(0)}</AvatarFallback>
+                                                                    </Avatar>
+                                                                    <span className="font-bold text-sm group-hover:text-primary transition-colors">{child.name}</span>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-xs text-muted-foreground">{child.className}</TableCell>
+                                                            <TableCell>
+                                                                <Badge variant={child.attendanceToday === 'Present' ? 'default' : child.attendanceToday === 'Absent' ? 'destructive' : 'secondary'} className="text-[10px] font-bold px-2 py-0">
+                                                                    {child.attendanceToday}
+                                                                </Badge>
+                                                            </TableCell>
+                                                            <TableCell className="text-right font-black text-sm">
+                                                                <span className={child.studentArrears > 0 ? "text-destructive" : "text-emerald-600"}>
+                                                                    GH¢{child.studentArrears.toFixed(2)}
+                                                                </span>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <Eye className="w-4 h-4 text-primary" />
+                                                                </Button>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Recent Announcements Feed */}
+                                    <div className="space-y-4">
+                                        <h3 className="text-lg font-bold text-primary flex items-center gap-2 px-1">
+                                            <Megaphone className="w-5 h-5 text-indigo-600" /> Family Announcements
+                                        </h3>
+                                        <div className="space-y-3">
+                                            {familyAnnouncements.length === 0 ? (
+                                                <Card className="border-dashed border-2 border-muted bg-transparent">
+                                                    <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                                                        <Info className="w-8 h-8 text-muted-foreground mb-2" />
+                                                        <p className="text-sm text-muted-foreground">No recent announcements for your family.</p>
+                                                    </CardContent>
+                                                </Card>
+                                            ) : (
+                                                familyAnnouncements.slice(0, 5).map(ann => (
+                                                    <Card key={ann.id} className="border-none shadow-lg bg-white overflow-hidden group hover:shadow-xl transition-all">
+                                                        <div className="h-1 bg-primary/20 group-hover:bg-primary transition-colors" />
+                                                        <CardHeader className="p-4">
+                                                            <div className="flex justify-between items-start">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-1">
+                                                                        {ann.recipient === 'all' ? 'School Wide' : `For: ${familyChildren.find(c => c.studentId === ann.recipient)?.name || ann.recipient}`}
+                                                                    </span>
+                                                                    <CardTitle className="text-sm font-black">{ann.subject}</CardTitle>
+                                                                </div>
+                                                                <span className="text-[10px] text-muted-foreground font-medium">{new Date(ann.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                                                            </div>
+                                                            <p className="mt-2 text-xs text-muted-foreground line-clamp-2">{ann.message}</p>
+                                                        </CardHeader>
+                                                    </Card>
+                                                ))
+                                            )}
                                         </div>
-                                    )}
-                                    <div className="flex-1">
-                                        <CardTitle className="text-xl">{child.name}</CardTitle>
-                                        <CardDescription>{child.className}</CardDescription>
-                                        <div className="mt-2 pt-2 border-t border-border">
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-xs font-medium text-muted-foreground">Balance:</span>
-                                                <span className={cn("text-sm font-bold", child.studentArrears > 0 ? "text-destructive" : "text-success")}>
-                                                    GH¢{child.studentArrears.toFixed(2)}
-                                                </span>
+                                    </div>
+                                </div>
+
+                                {/* Right Side: Upcoming Events & Quick Links */}
+                                <div className="space-y-8">
+                                    <Card className="border-none shadow-2xl bg-primary text-white rounded-2xl overflow-hidden">
+                                        <CardHeader>
+                                            <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                                <CalendarDays className="w-5 h-5" /> Upcoming Events
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            {calendarEvents.filter(e => new Date(e.date) >= new Date()).slice(0, 3).length === 0 ? (
+                                                <p className="text-xs text-white/70 italic text-center py-4">No upcoming events scheduled.</p>
+                                            ) : (
+                                                calendarEvents.filter(e => new Date(e.date) >= new Date()).slice(0, 3).map(event => (
+                                                    <div key={event.id} className="flex gap-3 p-3 bg-white/10 rounded-xl hover:bg-white/20 transition-all cursor-default">
+                                                        <div className="flex flex-col items-center justify-center min-w-[40px] h-10 bg-white text-primary rounded-lg font-black text-xs leading-tight">
+                                                            <span>{new Date(event.date).getDate()}</span>
+                                                            <span className="text-[8px] uppercase">{new Date(event.date).toLocaleDateString('en-GB', { month: 'short' })}</span>
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-xs font-bold leading-tight">{event.title}</span>
+                                                            <span className="text-[10px] text-white/70 line-clamp-1">{event.type}</span>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                            <Button variant="secondary" className="w-full h-8 text-[10px] font-black uppercase tracking-widest mt-2" onClick={() => setFamilyActiveTab('calendar')}>
+                                                View Full Calendar
+                                            </Button>
+                                        </CardContent>
+                                    </Card>
+
+                                    <div className="space-y-4">
+                                        <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground px-1">Resources</h3>
+                                        <div className="grid grid-cols-1 gap-3">
+                                            <Button variant="outline" className="justify-start h-12 rounded-xl border-primary/10 hover:bg-primary/5 transition-all gap-3 bg-white" onClick={() => window.open('tel:' + schoolDetails?.schoolPhone)}>
+                                                <Phone className="w-4 h-4 text-primary" />
+                                                <div className="flex flex-col items-start">
+                                                    <span className="text-xs font-bold">Contact School</span>
+                                                    <span className="text-[9px] text-muted-foreground">Speak with the office</span>
+                                                </div>
+                                            </Button>
+                                            <Button variant="outline" className="justify-start h-12 rounded-xl border-primary/10 hover:bg-primary/5 transition-all gap-3 bg-white" onClick={() => window.open('mailto:' + schoolDetails?.schoolEmail)}>
+                                                <Mail className="w-4 h-4 text-primary" />
+                                                <div className="flex flex-col items-start">
+                                                    <span className="text-xs font-bold">Email Office</span>
+                                                    <span className="text-[9px] text-muted-foreground">General inquiries</span>
+                                                </div>
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </TabsContent>
+
+                        <TabsContent value="children" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {childrenWithArrears.map(child => (
+                                    <Card key={child.studentId} className="cursor-pointer border-none shadow-xl hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 rounded-3xl overflow-hidden group" onClick={() => { setActiveStudentId(child.studentId); fetchStudentData(child.studentId, child); }}>
+                                        <div className={cn("h-2 w-full", child.studentArrears > 0 ? "bg-destructive" : "bg-emerald-500")} />
+                                        <CardHeader className="flex flex-row items-center gap-4 p-6">
+                                            {child.profilePicture ? (
+                                                <img src={child.profilePicture} alt={child.name} className="w-20 h-20 rounded-2xl object-cover border-2 border-primary/10 shadow-lg group-hover:scale-105 transition-transform" />
+                                            ) : (
+                                                <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-black text-2xl shadow-inner group-hover:scale-105 transition-transform">
+                                                    {child.name.charAt(0)}
+                                                </div>
+                                            )}
+                                            <div className="flex-1">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">{child.className}</span>
+                                                    <CardTitle className="text-xl font-black group-hover:text-primary transition-colors">{child.name}</CardTitle>
+                                                    <CardDescription className="text-xs font-bold mt-1">ID: {child.studentId}</CardDescription>
+                                                </div>
                                             </div>
+                                        </CardHeader>
+                                        <CardFooter className="bg-muted/30 p-6 flex flex-col gap-4">
+                                            <div className="w-full flex justify-between items-center bg-white p-3 rounded-xl shadow-sm">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Total Balance</span>
+                                                    <span className={cn("text-lg font-black", child.studentArrears > 0 ? "text-destructive" : "text-emerald-600")}>
+                                                        GH¢{child.studentArrears.toFixed(2)}
+                                                    </span>
+                                                </div>
+                                                <Badge variant={child.attendanceToday === 'Present' ? 'default' : child.attendanceToday === 'Absent' ? 'destructive' : 'secondary'} className="px-3 py-1 font-black text-[10px] uppercase">
+                                                    {child.attendanceToday}
+                                                </Badge>
+                                            </div>
+                                            <Button className="w-full rounded-xl h-10 font-black text-xs uppercase tracking-widest gap-2">
+                                                <UserCircle className="w-4 h-4" /> View Profile
+                                            </Button>
+                                        </CardFooter>
+                                    </Card>
+                                ))}
+                            </div>
+                        </TabsContent>
+
+                        <TabsContent value="calendar" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                             <Card className="border-none shadow-2xl rounded-3xl overflow-hidden bg-white">
+                                <CardHeader className="bg-primary/5 border-b border-primary/10 py-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-3 bg-primary/10 rounded-2xl">
+                                            <CalendarDays className="w-6 h-6 text-primary" />
+                                        </div>
+                                        <div>
+                                            <CardTitle className="text-2xl font-black text-primary tracking-tight">School Calendar</CardTitle>
+                                            <CardDescription className="text-sm font-bold">Stay updated with academic events and holidays.</CardDescription>
                                         </div>
                                     </div>
                                 </CardHeader>
+                                <CardContent className="p-8">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {calendarEvents.length === 0 ? (
+                                            <div className="col-span-full py-12 text-center text-muted-foreground font-bold">No school events scheduled yet.</div>
+                                        ) : (
+                                            calendarEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(event => (
+                                                <div key={event.id} className="relative group p-6 rounded-3xl border-2 border-primary/5 hover:border-primary/20 bg-white hover:shadow-xl transition-all duration-300">
+                                                    <div className={cn(
+                                                        "absolute top-4 right-4 px-2 py-1 rounded-lg text-[9px] font-black uppercase",
+                                                        event.type === 'Holiday' ? "bg-red-100 text-red-600" : event.type === 'Exam' ? "bg-indigo-100 text-indigo-600" : "bg-emerald-100 text-emerald-600"
+                                                    )}>
+                                                        {event.type}
+                                                    </div>
+                                                    <div className="flex flex-col gap-4">
+                                                        <div className="w-12 h-12 bg-primary/10 rounded-2xl flex flex-col items-center justify-center text-primary font-black shadow-inner">
+                                                            <span className="text-lg leading-none">{new Date(event.date).getDate()}</span>
+                                                            <span className="text-[10px] uppercase leading-none">{new Date(event.date).toLocaleDateString('en-GB', { month: 'short' })}</span>
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="text-lg font-black text-primary leading-tight group-hover:text-primary/80 transition-colors">{event.title}</h4>
+                                                            <p className="text-xs text-muted-foreground font-bold mt-2 leading-relaxed">{event.description}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </CardContent>
                             </Card>
-                        ))}
-                    </div>
+                        </TabsContent>
+                    </Tabs>
                 </main>
             </div>
         );
@@ -629,7 +1063,7 @@ function DashboardContent() {
                                 {currentPeriod ? `${currentPeriod.year} - ${currentPeriod.term}` : 'All Time'}
                             </Badge>
                          </div>
-                         {totalOutstanding > 0 && (
+                         {financialData.totalOutstanding > 0 && (
                              <Badge className="bg-destructive/10 text-destructive border-destructive/20 text-[10px] font-bold animate-pulse">
                                  Action Required: Arrears Detected
                              </Badge>
@@ -661,11 +1095,12 @@ function DashboardContent() {
                                         </Select>
                                     </div>
                                 </div>
-
                                 <StudentLedgerView 
                                     student={studentData} 
                                     periods={academicPeriods} 
                                     selectedPeriodId={selectedPeriodId} 
+                                    feeCategories={feeCategories}
+                                    schoolId={schoolId || undefined}
                                 />
                             </section>
 
@@ -714,9 +1149,13 @@ function DashboardContent() {
                                                     studentName={studentData.name}
                                                     schoolId={schoolId!}
                                                     email={studentData.parentEmail}
-                                                    outstandingBalance={totalOutstanding}
+                                                    outstandingBalance={financialData.totalOutstanding}
                                                     hubtelMerchantNumber={schoolDetails?.hubtelMerchantNumber || ''}
                                                     periodId={selectedPeriodId}
+                                                    mainFeesBalance={financialData.mainFeesBalance}
+                                                    dailyFeesBalance={financialData.dailyFeesBalance}
+                                                    dailyFeeEstimate={financialData.dailyFeeEstimate}
+                                                    dailyAccrued={financialData.dailyAccrued}
                                                 />
                                             </div>
                                         </div>

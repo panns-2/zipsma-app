@@ -23,6 +23,10 @@ interface FeePaymentDialogProps {
   email?: string;
   hubtelMerchantNumber?: string;
   periodId: string;
+  mainFeesBalance: number;
+  dailyFeesBalance: number;
+  dailyFeeEstimate: number;
+  dailyAccrued: number;
 }
 
 export function FeePaymentDialog({
@@ -33,15 +37,37 @@ export function FeePaymentDialog({
   email,
   hubtelMerchantNumber,
   periodId,
+  mainFeesBalance,
+  dailyFeesBalance,
+  dailyFeeEstimate,
+  dailyAccrued,
 }: FeePaymentDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [customAmount, setCustomAmount] = useState<number | string>('');
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [isVerifying, setIsVerifying] = useState(false);
   const [showManualVerify, setShowManualVerify] = useState(false);
   const [manualTxId, setManualTxId] = useState('');
 
   const refKey = `last_hubtel_ref_${schoolId}_${studentId}`;
   const lastRef = typeof window !== 'undefined' ? localStorage.getItem(refKey) : null;
+
+  const handleToggleItem = (item: string, amount: number) => {
+    const newSelected = new Set(selectedItems);
+    if (newSelected.has(item)) {
+      newSelected.delete(item);
+    } else {
+      newSelected.add(item);
+    }
+    setSelectedItems(newSelected);
+    
+    // Calculate new total from selected items
+    let total = 0;
+    if (newSelected.has('Main School Fees') && mainFeesBalance > 0) total += mainFeesBalance;
+    if (newSelected.has('Daily Fees') && dailyAccrued > 0) total += dailyAccrued;
+    
+    setCustomAmount(total > 0 ? total.toFixed(2) : '');
+  };
 
   const handleVerify = async (refToUse?: string) => {
     const reference = refToUse || manualTxId;
@@ -82,8 +108,14 @@ export function FeePaymentDialog({
   };
 
   const amountToPay = Number(customAmount);
-  const isInvalidAmount = amountToPay <= 0 || (customAmount !== '' && amountToPay > outstandingBalance);
+  const maxAllowedPayment = mainFeesBalance + Math.max(dailyFeesBalance, dailyFeeEstimate);
+  const isInvalidAmount = amountToPay <= 0 || (customAmount !== '' && amountToPay > maxAllowedPayment + 0.01); // Small buffer for float math
   const canPay = amountToPay > 0 && !isInvalidAmount;
+
+  // Prepare display items
+  const displayDescription = selectedItems.size > 0 
+    ? `Fees: ${Array.from(selectedItems).join(', ')}`
+    : `Fee Payment: ${studentName}`;
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -92,36 +124,82 @@ export function FeePaymentDialog({
           Pay Fees Online
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>School Fees Payment</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          {/* Fee Summary Section */}
-          <div className="p-4 bg-muted/50 rounded-lg space-y-2 text-sm">
-            <h3 className="font-semibold mb-2">Account Balance</h3>
-            <div className="flex justify-between text-base font-bold border-b pb-2 mb-2">
-              <span>Total Due</span>
-              <span className="font-mono text-destructive">GH¢{outstandingBalance.toFixed(2)}</span>
+          {/* Fee Selection Section */}
+          <div className="p-4 bg-muted/50 rounded-lg space-y-4">
+            <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground">Select Fees to Pay</h3>
+            
+            <div className="space-y-2">
+                {mainFeesBalance > 0 && (
+                    <div 
+                        onClick={() => handleToggleItem('Main School Fees', mainFeesBalance)}
+                        className={`flex justify-between items-center p-3 rounded-md border-2 cursor-pointer transition-all ${
+                            selectedItems.has('Main School Fees') ? 'border-primary bg-primary/5' : 'border-transparent bg-background/50'
+                        }`}
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${selectedItems.has('Main School Fees') ? 'bg-primary border-primary' : 'border-muted-foreground'}`}>
+                                {selectedItems.has('Main School Fees') && <div className="w-2 h-2 bg-white rounded-full" />}
+                            </div>
+                            <span className="text-sm font-semibold">Main School Fees</span>
+                        </div>
+                        <span className="font-mono font-bold">GH¢{mainFeesBalance.toFixed(2)}</span>
+                    </div>
+                )}
+
+                {(dailyAccrued > 0 || dailyFeeEstimate > 0) && (
+                    <div 
+                        onClick={() => (dailyAccrued > 0 || dailyFeeEstimate > 0) && handleToggleItem('Daily Fees', dailyAccrued > 0 ? dailyAccrued : 0)}
+                        className={`flex justify-between items-center p-3 rounded-md border-2 transition-all ${
+                            selectedItems.has('Daily Fees') ? 'border-primary bg-primary/5' : 'border-transparent bg-background/50'
+                        } ${(dailyAccrued <= 0 && dailyFeeEstimate <= 0) ? 'opacity-70' : 'cursor-pointer'}`}
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${selectedItems.has('Daily Fees') ? 'bg-primary border-primary' : 'border-muted-foreground'}`}>
+                                {selectedItems.has('Daily Fees') && <div className="w-2 h-2 bg-white rounded-full" />}
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-sm font-semibold">Total Daily Accrued</span>
+                                {dailyFeeEstimate > 0 && (
+                                    <span className="text-[10px] text-muted-foreground">Term Estimate: GH¢{dailyFeeEstimate.toFixed(2)}</span>
+                                )}
+                            </div>
+                        </div>
+                        <span className="font-mono font-bold">GH¢{dailyAccrued > 0 ? dailyAccrued.toFixed(2) : '0.00'}</span>
+                    </div>
+                )}
             </div>
-            <p className="text-xs text-muted-foreground">Payments will be credited against your overall outstanding balance.</p>
+
+            <div className="flex justify-between items-center pt-2 border-t font-bold">
+                <span className="text-sm">Total Selected</span>
+                <span className="text-lg text-primary">GH¢{amountToPay.toFixed(2)}</span>
+            </div>
           </div>
 
           {/* Payment Section */}
           <div className="space-y-4 pt-4 border-t">
-            <h3 className="font-semibold">Make a New Payment</h3>
             <div className="flex flex-col gap-4">
               <div>
-                <Label htmlFor="amount">Amount to Pay (GH¢)</Label>
+                <Label htmlFor="amount" className="font-bold text-xs uppercase text-muted-foreground">Or Enter Custom Amount (GH¢)</Label>
                 <div className="relative mt-2">
                   <Input
                     id="amount"
                     type="number"
-                    placeholder={outstandingBalance > 0 ? outstandingBalance.toFixed(2) : "0.00"}
+                    placeholder="0.00"
                     value={customAmount}
                     onChange={e => setCustomAmount(e.target.value)}
-                    className="text-lg py-6"
+                    className="text-lg py-6 font-bold"
                   />
+                  {isInvalidAmount && customAmount !== '' && amountToPay > maxAllowedPayment + 0.01 && (
+                      <p className="text-[10px] text-destructive mt-1 font-bold">Amount exceeds maximum allowed payment (GH¢{maxAllowedPayment.toFixed(2)})</p>
+                  )}
+                  {!isInvalidAmount && customAmount !== '' && amountToPay > Math.max(0, outstandingBalance) + 0.01 && (
+                      <p className="text-[10px] text-success mt-1 font-bold">Advance payment of GH¢{(amountToPay - Math.max(0, outstandingBalance)).toFixed(2)} will be credited for future daily fees.</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -134,12 +212,12 @@ export function FeePaymentDialog({
                     studentName={studentName}
                     schoolId={schoolId}
                     periodId={periodId}
-                    description={`Fee Payment: ${studentName}`}
+                    description={displayDescription}
                     onInitialize={() => setIsOpen(false)}
                     disabled={!canPay}
-                    className="w-full py-6 text-lg"
+                    className="w-full py-6 text-lg font-black"
                 >
-                    Pay GH¢{amountToPay > 0 ? amountToPay.toFixed(2) : '...'} Now
+                    Process Payment: GH¢{amountToPay > 0 ? amountToPay.toFixed(2) : '0.00'}
                 </PayWithHubtel>
                 <div className="mt-4 flex flex-wrap justify-center gap-3 text-[10px] text-muted-foreground font-medium uppercase tracking-wider opacity-70">
                     <span>Mobile Money</span>
@@ -152,14 +230,14 @@ export function FeePaymentDialog({
           </div>
 
           {/* Verification Section */}
-          <div className="pt-6 border-t mt-4">
+          <div className="pt-4 border-t mt-4 opacity-80">
             <div className="flex flex-col gap-3">
                 {lastRef && (
                     <Button 
                         variant="outline" 
                         onClick={() => handleVerify(lastRef)}
                         disabled={isVerifying}
-                        className="w-full border-dashed border-primary/50 text-primary hover:bg-primary/5"
+                        className="w-full border-dashed border-primary/50 text-primary hover:bg-primary/5 h-10 text-xs font-bold"
                     >
                         {isVerifying ? "Verifying..." : "Verify My Last Payment"}
                     </Button>
@@ -167,34 +245,31 @@ export function FeePaymentDialog({
 
                 <button 
                     onClick={() => setShowManualVerify(!showManualVerify)}
-                    className="text-xs text-center text-muted-foreground hover:text-primary transition-colors underline underline-offset-4"
+                    className="text-[10px] text-center text-muted-foreground hover:text-primary transition-colors underline underline-offset-4 font-bold uppercase tracking-tight"
                 >
                     {showManualVerify ? "Hide manual verification" : "Already paid? Verify with Transaction ID"}
                 </button>
 
                 {showManualVerify && (
                     <div className="space-y-3 p-3 bg-muted/30 rounded-md animate-in fade-in slide-in-from-top-1">
-                        <Label htmlFor="txId" className="text-xs">Hubtel Transaction ID</Label>
+                        <Label htmlFor="txId" className="text-xs font-bold">Hubtel Transaction ID</Label>
                         <div className="flex gap-2">
                             <Input 
                                 id="txId" 
                                 placeholder="e.g. 1234567" 
                                 value={manualTxId}
                                 onChange={e => setManualTxId(e.target.value)}
-                                className="h-8 text-xs"
+                                className="h-8 text-xs font-mono"
                             />
                             <Button 
                                 size="sm" 
-                                className="h-8 text-xs"
+                                className="h-8 text-xs px-4"
                                 onClick={() => handleVerify()}
                                 disabled={isVerifying || !manualTxId}
                             >
                                 {isVerifying ? "..." : "Verify"}
                             </Button>
                         </div>
-                        <p className="text-[10px] text-muted-foreground italic">
-                            Found in your payment confirmation SMS or Email.
-                        </p>
                     </div>
                 )}
             </div>

@@ -43,10 +43,13 @@ export function FirebaseClientProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
+      console.log("[FirebaseClientProvider] Starting initialization...");
       const config = getFirebaseConfig();
+      console.log("[FirebaseClientProvider] Config loaded:", !!config);
       
       if (config) {
           const firebaseServices = initializeFirebase(config);
+          console.log("[FirebaseClientProvider] Services initialized:", !!firebaseServices);
           setServices(firebaseServices);
       } else {
           console.error("Firebase configuration could not be loaded. Ensure all necessary NEXT_PUBLIC_FIREBASE_* variables are set in .env.local");
@@ -57,6 +60,7 @@ export function FirebaseClientProvider({ children }: { children: ReactNode }) {
       setConfigError(true);
     }
     
+    console.log("[FirebaseClientProvider] Setting isInitializing to false");
     setIsInitializing(false);
 
   }, []);

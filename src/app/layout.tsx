@@ -1,12 +1,11 @@
 import type { Metadata } from 'next';
-import { Inter, Plus_Jakarta_Sans, Roboto_Mono } from 'next/font/google';
+import { Inter, Roboto_Mono } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import FirebaseErrorListener from '@/components/FirebaseErrorListener';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
-const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakarta' });
 const robotoMono = Roboto_Mono({ subsets: ['latin'], variable: '--font-mono' });
 
 export const metadata: Metadata = {
@@ -24,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${jakarta.variable} ${robotoMono.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${robotoMono.variable}`}>
       <head>
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=3" />
         <meta name="theme-color" content="#1e3a8a" />
