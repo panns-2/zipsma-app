@@ -50,8 +50,8 @@ export async function POST(req: Request) {
         
         // We now only send the payRef in the callback, keeping the studentId private
         const callbackUrl = `${cleanBaseUrl}/api/hubtel?payRef=${clientReference}`;
-        const returnUrl = `${cleanBaseUrl}/parent/dashboard?payment=success&ref=${clientReference}`;
-        const cancellationUrl = `${cleanBaseUrl}/parent/dashboard?payment=cancelled`;
+        const returnUrl = `${cleanBaseUrl}/dashboard?payment=success&ref=${clientReference}`;
+        const cancellationUrl = `${cleanBaseUrl}/dashboard?payment=cancelled`;
 
         const payload = {
             totalAmount: Number(amount),
