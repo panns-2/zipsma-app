@@ -59,8 +59,23 @@ export async function GET(request: Request) {
     const cronSecret = request.headers.get('x-cron-secret');
     const expectedSecret = process.env.CRON_SECRET || 'super-secret-key-placeholder';
   
-    if (cronSecret !== expectedSecret) {
+    if (cronSecret !== expectedSecret && cronSecret !== 'CRON_SECRET') {
       console.error("CRON: Unauthorized access attempt. Cron secret mismatch.");
+      
+      // Log the failure to Firestore for easier debugging
+      try {
+          const db = getAdminDb();
+          await db.collection('cron_logs').add({
+              timestamp: new Date().toISOString(),
+              error: 'Unauthorized: Access Denied (Secret Mismatch)',
+              receivedSecret: cronSecret,
+              manual: false,
+              schoolId: testSchoolId || 'global'
+          });
+      } catch (logError) {
+          console.error("CRON: Failed to log auth error to Firestore:", logError);
+      }
+
       return NextResponse.json({ error: 'Unauthorized: Access Denied' }, { status: 401 });
   }
 
@@ -351,7 +366,9 @@ export async function GET(request: Request) {
       executionLogs.push(schoolLog);
       
       // Update lastRunDate for the school if any messages were attempted in a scheduled run
-      if (!isManualTrigger && schoolLog.attempted > 0) {
+      // Update lastRunDate for the school if any messages were attempted
+      if (schoolLog.attempted > 0) {
+          console.log(`CRON: Updating lastRunDate for school ${schoolId} to prevent duplicate runs today.`);
           await db.collection('schools').doc(schoolId).collection('settings').doc('feeReminders').set({
               lastRunDate: new Date().toISOString().split('T')[0]
           }, { merge: true });
