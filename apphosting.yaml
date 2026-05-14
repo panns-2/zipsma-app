@@ -36,7 +36,7 @@ secretEnv:
     
 # Schedule for the cron job to send fee reminders
 schedule:
-  schedule: "*/15 * * * *" # Runs every 15 minutes to match school-specific schedules
+  schedule: "* * * * *" # Runs EVERY MINUTE to ensure exact-time delivery as requested by admin
   target:
     http:
       path: "/api/cron"

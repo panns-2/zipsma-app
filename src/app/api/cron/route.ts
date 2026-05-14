@@ -37,9 +37,8 @@ const isTimeToSend = (settings: any) => {
         return false;
     }
 
-    // 2. Check if the current time is within a 15-minute window of the scheduled time.
-    // (Matching the 15-minute cron heartbeat frequency)
-    const isTimeMatch = currentHour === scheduledHour && Math.abs(currentMinute - scheduledMinute) < 15;
+    // 2. Check if the current time is exactly the scheduled time (within a 1-minute window).
+    const isTimeMatch = currentHour === scheduledHour && Math.abs(currentMinute - scheduledMinute) < 1;
 
     if (!isTimeMatch) {
         console.log("CRON: Time does not match window. Skipping.");
