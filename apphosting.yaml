@@ -10,21 +10,23 @@ repository:
   owner: Panns-2
   name: zipsma-app
   branch: main
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: "AIzaSyAh558UOucYesb5CDrmCFJS9pJu7q5qqBg"
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: "zip-sma.firebaseapp.com"
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: "zip-sma"
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: "zip-sma.firebasestorage.app"
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "641452454332"
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:641452454332:web:5b665c368380c00360bbb9"
+  - variable: NEXT_PUBLIC_FIREBASE_DATABASE_URL
+    value: "https://zip-sma-default-rtdb.firebaseio.com"
+
 secretEnv:
-  - secret: NEXT_PUBLIC_FIREBASE_API_KEY
-    env: NEXT_PUBLIC_FIREBASE_API_KEY
-  - secret: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    env: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-  - secret: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    env: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-  - secret: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    env: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-  - secret: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    env: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-  - secret: NEXT_PUBLIC_FIREBASE_APP_ID
-    env: NEXT_PUBLIC_FIREBASE_APP_ID
-  - secret: NEXT_PUBLIC_FIREBASE_DATABASE_URL
-    env: NEXT_PUBLIC_FIREBASE_DATABASE_URL
   - secret: CRON_SECRET
     env: CRON_SECRET
   - secret: TWILIO_ACCOUNT_SID
@@ -35,11 +37,13 @@ secretEnv:
     env: TWILIO_PHONE_NUMBER
     
 # Schedule for the cron job to send fee reminders
-schedule:
-  schedule: "* * * * *" # Runs EVERY MINUTE to ensure exact-time delivery as requested by admin
-  target:
-    http:
-      path: "/api/cron"
-      method: GET
-      headers:
-        x-cron-secret: "CRON_SECRET"
+# Note: apphosting.yaml does not natively support scheduling yet.
+# Please set up a Google Cloud Scheduler job to ping this endpoint.
+# schedule:
+#   schedule: "* * * * *" # Runs EVERY MINUTE to ensure exact-time delivery as requested by admin
+#   target:
+#     http:
+#       path: "/api/cron"
+#       method: GET
+#       headers:
+#         x-cron-secret: "CRON_SECRET"
