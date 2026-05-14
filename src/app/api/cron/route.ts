@@ -366,8 +366,9 @@ export async function GET(request: Request) {
       executionLogs.push(schoolLog);
       
       // Update lastRunDate for the school if any messages were attempted in a scheduled run
-      // Update lastRunDate for the school if any messages were attempted
-      if (schoolLog.attempted > 0) {
+      // We only update lastRunDate if it was NOT a dry run. 
+      // Manual tests (test=true) that are NOT dry runs will also update the date to prevent duplicate automated runs.
+      if (schoolLog.attempted > 0 && !dryRun) {
           console.log(`CRON: Updating lastRunDate for school ${schoolId} to prevent duplicate runs today.`);
           await db.collection('schools').doc(schoolId).collection('settings').doc('feeReminders').set({
               lastRunDate: new Date().toISOString().split('T')[0]
