@@ -14,7 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { LogOut, MoreHorizontal, Edit, Trash2, PlusCircle, LayoutGrid, XCircle, Wallet, FileText, Landmark, Send, UtensilsCrossed, BookCopy, Calendar as CalendarIcon, CalendarDays, Upload, Loader2, UserPlus, Search, Users, Receipt, AlertCircle as AlertCircleIcon, Banknote, CheckCheck, ShieldCheck, TrendingDown, Package, FilePlus, HandCoins, Notebook, Phone, Mail, UserCircle, Home, HeartPulse, ShieldAlert, School as SchoolIcon, Eye, EyeOff, DatabaseZap, Bus, DollarSign, Settings, Archive, ArchiveRestore, Menu, Check, ChevronsUpDown, Save, ArrowLeft, AlertTriangle, RefreshCcw, Pencil, X } from 'lucide-react';
+import { LogOut, MoreHorizontal, Edit, Trash2, PlusCircle, LayoutGrid, XCircle, Wallet, Percent, FileText, Landmark, Send, UtensilsCrossed, BookCopy, Calendar as CalendarIcon, CalendarDays, Upload, Loader2, UserPlus, Search, Users, Receipt, AlertCircle as AlertCircleIcon, Banknote, CheckCheck, ShieldCheck, TrendingDown, Package, FilePlus, HandCoins, Notebook, Phone, Mail, UserCircle, Home, HeartPulse, ShieldAlert, School as SchoolIcon, Eye, EyeOff, DatabaseZap, Bus, DollarSign, Settings, Archive, ArchiveRestore, Menu, Check, ChevronsUpDown, Save, ArrowLeft, AlertTriangle, RefreshCcw, Pencil, X, ChevronDown, MessageSquare, Bell, BellOff } from 'lucide-react';
 import { ZipSMALogo } from '@/components/zipsma-logo';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useToast } from '@/hooks/use-toast';
@@ -24,7 +24,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { getStudents, addStudent, deleteStudent, updateStudentDetails, updateDailyCost, setAttendance, Student, FeeItem, PaymentItem, signOutUser, updateStudentId, sendAnnouncement, getAnnouncementsForAdmin, deleteAnnouncement, Announcement, CalendarEvent, getCalendarEvents, addCalendarEvent, deleteCalendarEvent, StaffId, getStaffIds, addStaffId, deleteStaffId, updateStaffId, Expenditure, getExpenditures, addExpenditure, deleteExpenditure, Debt, getDebts, addDebt, deleteDebt, updateTransportationCost, getStaffDetails, StaffDetails, StaffRole, updateStaffSalary, School, getSchoolDetails, updateSchoolDetails, archiveStudent, archiveStaff, BankAccount, AcademicPeriod, getAcademicPeriods, addAcademicPeriod, setAsCurrentPeriod, deleteAcademicPeriod, updateAcademicPeriod, migrateToLedger, postLedgerTransaction, voidLedgerTransaction, updateLedgerTransaction, LedgerTransaction, getFeeCategories, addFeeCategory, deleteFeeCategory, updateFeeCategory, FeeCategory, postBulkClassLedgerTransaction, postBulkDailyPayments, resetSchoolFinancials, reconcileDailyFees, voidFeeCategoryRecords, isDailyTransaction } from '@/lib/data-store';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { getStudents, addStudent, deleteStudent, updateStudentDetails, setAttendance, Student, FeeItem, PaymentItem, signOutUser, updateStudentId, sendAnnouncement, getAnnouncementsForAdmin, deleteAnnouncement, Announcement, CalendarEvent, getCalendarEvents, addCalendarEvent, deleteCalendarEvent, StaffId, getStaffIds, addStaffId, deleteStaffId, updateStaffId, Expenditure, getExpenditures, addExpenditure, deleteExpenditure, Debt, getDebts, addDebt, deleteDebt, getStaffDetails, StaffDetails, StaffRole, updateStaffSalary, School, getSchoolDetails, updateSchoolDetails, archiveStudent, archiveStaff, BankAccount, AcademicPeriod, InstallmentStage, getAcademicPeriods, addAcademicPeriod, setAsCurrentPeriod, deleteAcademicPeriod, updateAcademicPeriod, postLedgerTransaction, voidLedgerTransaction, updateLedgerTransaction, LedgerTransaction, getFeeCategories, addFeeCategory, deleteFeeCategory, updateFeeCategory, FeeCategory, postBulkClassLedgerTransaction, postBulkDailyPayments, resetSchoolFinancials, reconcileDailyFees, voidFeeCategoryRecords, isDailyTransaction, calculateInstallmentExpectedAmount, calculateInstallmentOutstandingBalance } from '@/lib/data-store';
 import { Calendar } from '@/components/ui/calendar';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -64,7 +65,7 @@ const defaultAddStudentForm = {
     feeDiscount: '' as any,
     dailyFees: [] as { categoryId: string, rate: number }[]
 };
-const defaultEditStudentForm: Omit<Student, 'dateAdded' | 'generalFees' | 'generalPayments' | 'dailyFeedingCost' | 'feedingFeePayments' | 'attendance' | 'transportationCost' | 'transportationPayments' | 'isArchived' | 'feeDiscount' | 'dailyFees'> & { feeDiscount?: string | number, dailyFees?: { categoryId: string, rate: number }[] } = {
+const defaultEditStudentForm: Omit<Student, 'dateAdded' | 'attendance' | 'isArchived' | 'feeDiscount' | 'dailyFees'> & { feeDiscount?: string | number, dailyFees?: { categoryId: string, rate: number }[] } = {
     studentId: '',
     name: '',
     className: '',
@@ -99,11 +100,12 @@ const defaultSchoolSettingsForm = {
     momoNumber: '', 
     momoName: '', 
     bankAccounts: [] as BankAccount[],
+    hubtelSmsClientId: '',
+    hubtelSmsClientSecret: '',
+    hubtelSenderId: '',
+    hubtelPaymentClientId: '',
+    hubtelPaymentClientSecret: '',
     hubtelMerchantNumber: '',
-    hubtelClientId: '',
-    hubtelClientSecret: '',
-    sendexaApiToken: '',
-    sendexaSenderId: '',
     settingsPin: ''
 };
 
@@ -157,7 +159,7 @@ function AdminDashboard() {
     const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
     const [selectedClassForFees, setSelectedClassForFees] = useState<string>('all');
     const [showSecretKey, setShowSecretKey] = useState(false);
-    const [showSendexaSecret, setShowSendexaSecret] = useState(false); // Add this line
+    const [showPaymentSecret, setShowPaymentSecret] = useState(false);
     const [academicPeriods, setAcademicPeriods] = useState<AcademicPeriod[]>([]);
     const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
     const [isAcademicSetupOpen, setIsAcademicSetupOpen] = useState(false);
@@ -172,7 +174,8 @@ function AdminDashboard() {
         startDate: '',
         endDate: '',
         vacationDate: '',
-        nextTermBegins: ''
+        nextTermBegins: '',
+        installmentPlan: [] as InstallmentStage[]
     });
     const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
     const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
@@ -198,6 +201,7 @@ function AdminDashboard() {
     const [isSalaryDialogOpen, setIsSalaryDialogOpen] = useState(false);
     const [selectedStudentForEdit, setSelectedStudentForEdit] = useState<Student | null>(null);
     const [selectedStudentForView, setSelectedStudentForView] = useState<Student | null>(null);
+    const [expandedFamilies, setExpandedFamilies] = useState<Record<string, boolean>>({});
     const [selectedStaffForSalary, setSelectedStaffForSalary] = useState<StaffId | null>(null);
     const [newCategoryName, setNewCategoryName] = useState('');
     const [newCategoryIsDaily, setNewCategoryIsDaily] = useState(false);
@@ -205,8 +209,7 @@ function AdminDashboard() {
     const [editingCategoryName, setEditingCategoryName] = useState('');
     const [editingCategoryIsDaily, setEditingCategoryIsDaily] = useState(false);
     const [feesActiveSubTab, setFeesActiveSubTab] = useState<'main' | 'daily'>('main');
-    const [dailyFeeInternalTab, setDailyFeeInternalTab] = useState('summary');
-    const [selectedDailyCategoryForPayments, setSelectedDailyCategoryForPayments] = useState<string>('');
+    const [selectedDailyCategoryForPayments, setSelectedDailyCategoryForPayments] = useState<string>('feeding');
     const [selectedPaymentDate, setSelectedPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [bulkDailyPaymentsSelection, setBulkDailyPaymentsSelection] = useState<Record<string, boolean>>({});
 
@@ -217,9 +220,6 @@ function AdminDashboard() {
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [logoFile, setLogoFile] = useState<File | null>(null);
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
-    const [generalFeeForm, setGeneralFeeForm] = useState<FeeItem[]>([]);
-    const [dailyCostInput, setDailyCostInput] = useState('');
-    const [transportationCostInput, setTransportationCostInput] = useState('');
     const [editingRateId, setEditingRateId] = useState<string | null>(null);
     const [editingRateValue, setEditingRateValue] = useState<string>('');
     const [salaryForm, setSalaryForm] = useState({ amount: '' });
@@ -282,14 +282,11 @@ function AdminDashboard() {
                 }
             }
 
-            const selectedCategory = [...feeCategories, ...dailyCategoriesForModal].find(c => c.id === bulkFeeForm.category);
-            const categoryName = selectedCategory ? selectedCategory.name : bulkFeeForm.category;
-
             const transactionData = {
                 type: 'fee' as const,
-                category: categoryName,
+                category: bulkFeeForm.category,
                 categoryId: bulkFeeForm.category,
-                description: bulkFeeForm.description || categoryName || 'Class Fee',
+                description: bulkFeeForm.description || 'Class Fee',
                 debit: amount,
                 credit: 0,
                 date: bulkFeeForm.date,
@@ -333,12 +330,45 @@ function AdminDashboard() {
         setIsRecordTransactionModalOpen(true);
     };
 
+    const handleSaveDailyRate = async () => {
+        if (!editingRateId || !editingRateValue) return;
+        const [studentId, categoryId] = editingRateId.split('|');
+        if (!studentId || !categoryId || !schoolId) return;
+
+        setIsSubmitting(true);
+        try {
+            const student = students.find(s => s.studentId === studentId);
+            if (!student) throw new Error("Student not found.");
+
+            const newRate = parseFloat(editingRateValue);
+            if (isNaN(newRate) || newRate < 0) throw new Error("Invalid rate amount.");
+
+            const updatedDailyFees = [...(student.dailyFees || [])];
+            const existingIndex = updatedDailyFees.findIndex(f => f.categoryId === categoryId);
+            
+            if (existingIndex >= 0) {
+                updatedDailyFees[existingIndex].rate = newRate;
+            } else {
+                updatedDailyFees.push({ categoryId, rate: newRate });
+            }
+
+            await updateStudentDetails(db, storage, auth, student.id || studentId, { dailyFees: updatedDailyFees }, null, schoolId);
+            await fetchAdminData();
+            toast({ title: "Rate Updated", description: `Daily rate has been successfully updated.` });
+            setEditingRateId(null);
+            setEditingRateValue('');
+        } catch (error: any) {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
 
     const handleOpenQuickDailyPayment = (studentId: string, category: string) => {
         const student = students.find(s => s.studentId === studentId);
         if (student) setSelectedStudentId(student.studentId);
         
-        // Find the category ID from the name if needed
         const cat = feeCategories.find(c => c.name === category || c.id === category);
         handleOpenTransactionModal('payment', null, cat?.id);
     };
@@ -386,7 +416,6 @@ function AdminDashboard() {
             const schoolData = await getSchoolDetails(db, schoolId);
             const currentPeriod = selectedPeriodId || schoolData?.currentPeriodId;
 
-            // Define fetchers with individual error handling to prevent one failure from blocking everything
             const safeFetch = async <T,>(promise: Promise<T>, label: string): Promise<T | null> => {
                 try {
                     return await promise;
@@ -430,7 +459,6 @@ function AdminDashboard() {
                 
                 if (activeStudents.length > 0) {
                     const stillExists = activeStudents.some(s => s.studentId === selectedStudentId);
-                    // If no student is selected or the previously selected one is gone, select the first one.
                     if (!selectedStudentId || !stillExists) {
                         setSelectedStudentId(activeStudents[0].studentId);
                     }
@@ -452,7 +480,6 @@ function AdminDashboard() {
             if (allAnnouncements) setAnnouncements(allAnnouncements.sort((a, b) => b.date.getTime() - a.date.getTime()));
             if (allFeeCategories) setFeeCategories(allFeeCategories);
 
-            // Set default selected period if not set
             if (!selectedPeriodId && schoolData?.currentPeriodId) {
                 setSelectedPeriodId(schoolData.currentPeriodId);
             } else if (!selectedPeriodId && allPeriods && allPeriods.length > 0) {
@@ -468,11 +495,12 @@ function AdminDashboard() {
                     momoNumber: schoolData.momoNumber || '',
                     momoName: schoolData.momoName || '',
                     bankAccounts: schoolData.bankAccounts || [],
+                    hubtelSmsClientId: schoolData.hubtelSmsClientId || '',
+                    hubtelSmsClientSecret: schoolData.hubtelSmsClientSecret || '',
+                    hubtelSenderId: schoolData.hubtelSenderId || '',
+                    hubtelPaymentClientId: schoolData.hubtelPaymentClientId || '',
+                    hubtelPaymentClientSecret: schoolData.hubtelPaymentClientSecret || '',
                     hubtelMerchantNumber: schoolData.hubtelMerchantNumber || '',
-                    hubtelClientId: schoolData.hubtelClientId || '',
-                    hubtelClientSecret: schoolData.hubtelClientSecret || '',
-                    sendexaApiToken: schoolData.sendexaApiToken || '',
-                    sendexaSenderId: schoolData.sendexaSenderId || '',
                     settingsPin: schoolData.settingsPin || ''
                 });
                 setLogoPreview(schoolData.logoUrl);
@@ -482,7 +510,6 @@ function AdminDashboard() {
         } catch (error: any) {
             console.error("Critical Data Fetch Error:", error);
             
-            // Exhaustive search for the Firebase Console link in all error properties
             let indexLink: string | undefined;
             const findLink = (obj: any): string | undefined => {
                 if (!obj) return undefined;
@@ -500,7 +527,6 @@ function AdminDashboard() {
             };
 
             indexLink = findLink(error) || findLink(error.stack);
-            const errorString = error.message || String(error);
             
             if (indexLink) {
                 toast({ 
@@ -524,15 +550,8 @@ function AdminDashboard() {
             } else {
                 toast({ 
                     title: "Data Loading Error", 
-                    description: (
-                        <div className="space-y-2">
-                            <p>Could not fetch dashboard data. Please verify your internet and database setup.</p>
-                            <div className="bg-black/20 p-2 rounded text-[10px] text-numeric break-all line-clamp-3">
-                                {errorString}
-                            </div>
-                        </div>
-                    ),
-                    variant: "destructive", 
+                    description: "Could not fetch dashboard data. Please verify your internet and database setup.",
+                    variant: "destructive",
                     duration: 15000 
                 });
             }
@@ -604,13 +623,7 @@ function AdminDashboard() {
 
     useEffect(() => {
         if (selectedStudent) {
-            setGeneralFeeForm(selectedStudent.generalFees || []);
-            setDailyCostInput(String(selectedStudent.dailyFeedingCost || ''));
-            setTransportationCostInput(String(selectedStudent.transportationCost || ''));
         } else {
-            setGeneralFeeForm([]);
-            setDailyCostInput('');
-            setTransportationCostInput('');
         }
     }, [selectedStudent]);
 
@@ -620,6 +633,21 @@ function AdminDashboard() {
     }
 
     const handleArchiveStudent = (student: Student) => setStudentToArchive(student);
+    const handleToggleMuteReminders = async (student: Student) => {
+        if (!db || !storage || !auth || !student.id) return;
+        try {
+            const newMuteStatus = !student.muteReminders;
+            await updateStudentDetails(db, storage, auth, student.id, { muteReminders: newMuteStatus }, null, schoolId || undefined);
+            setStudents(prev => prev.map(s => s.id === student.id ? { ...s, muteReminders: newMuteStatus } : s));
+            toast({
+                title: newMuteStatus ? 'Reminders Muted' : 'Reminders Enabled',
+                description: `Automatic fee reminders for ${student.name} have been ${newMuteStatus ? 'paused' : 'restored'}.`,
+            });
+        } catch (error) {
+            console.error("Error toggling mute status:", error);
+            toast({ title: 'Error', description: 'Failed to update reminder status.', variant: 'destructive' });
+        }
+    };
     const confirmArchiveStudent = async () => {
         if (studentToArchive) {
             setIsSubmitting(true);
@@ -801,15 +829,15 @@ function AdminDashboard() {
         }
     };
 
-    const handleMigrateLedger = async () => {
-        if (!selectedStudentId) return;
+    const handleRefreshLedger = async () => {
+        if (!schoolId || !selectedPeriodId) return;
         setIsSubmitting(true);
         try {
-            await migrateToLedger(db, auth, selectedStudentId, schoolId || undefined);
+            await reconcileDailyFees(db, auth, schoolId, selectedPeriodId);
             await fetchAdminData();
-            toast({ title: "Migration Successful", description: "All previous fees and payments have been moved to the Ledger." });
+            toast({ title: "Ledger Refreshed", description: "Automated entries have been reconciled with current records." });
         } catch (error: any) {
-            toast({ title: "Migration Error", description: error.message, variant: "destructive" });
+            toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
             setIsSubmitting(false);
         }
@@ -867,31 +895,27 @@ function AdminDashboard() {
     };
 
     const handleRecordDailyPayments = async () => {
-        if (!schoolId || !selectedDailyCategoryForPayments) {
-            toast({ title: "Missing Information", description: "Please select a category first.", variant: "destructive" });
+        if (!schoolId) {
+            toast({ title: "Error", description: "School ID missing.", variant: "destructive" });
             return;
         }
 
-        const selectedIds = Object.keys(bulkDailyPaymentsSelection).filter(id => bulkDailyPaymentsSelection[id]);
-        if (selectedIds.length === 0) {
-            toast({ title: "No Students Selected", description: "Please check the students you want to record payments for.", variant: "destructive" });
+        const selectedKeys = Object.keys(bulkDailyPaymentsSelection).filter(key => bulkDailyPaymentsSelection[key]);
+        if (selectedKeys.length === 0) {
+            toast({ title: "No Records Selected", description: "Please select the daily fee records you want to record payments for.", variant: "destructive" });
             return;
         }
 
-        const category = feeCategories.filter(c => c.isDaily).find(c => c.id === selectedDailyCategoryForPayments) || { name: 'Feeding Fee', id: 'feeding' };
-        
-        const paymentsToRecord = selectedIds.map(sid => {
-            const student = students.find(s => s.studentId === sid);
-            let amount = 0;
-            if (selectedDailyCategoryForPayments === 'feeding') {
-                amount = Number(student?.dailyFeedingCost) || 0;
-            } else {
-                const df = student?.dailyFees?.find(f => f.categoryId === selectedDailyCategoryForPayments);
-                amount = Number(df?.rate) || 0;
-            }
+        const paymentsToRecord = selectedKeys.map(key => {
+            const [studentId, categoryId] = key.split('|');
+            const student = students.find(s => s.studentId === studentId);
+            const category = feeCategories.find(c => c.id === categoryId) || { name: 'Feeding Fee', id: 'feeding' };
+            
+            const df = student?.dailyFees?.find(f => f.categoryId === categoryId);
+            const amount = Number(df?.rate) || 0;
 
             return {
-                studentId: sid,
+                studentId,
                 amount,
                 date: selectedPaymentDate,
                 category: category.name,
@@ -902,7 +926,7 @@ function AdminDashboard() {
         }).filter(p => p.amount > 0);
 
         if (paymentsToRecord.length === 0) {
-            toast({ title: "Zero Amount", description: "Selected students have GH¢0.00 rate for this category.", variant: "destructive" });
+            toast({ title: "Zero Amount", description: "Selected records have GH¢0.00 rate.", variant: "destructive" });
             return;
         }
 
@@ -910,7 +934,7 @@ function AdminDashboard() {
         try {
             await postBulkDailyPayments(db, auth, schoolId, paymentsToRecord);
             await fetchAdminData();
-            toast({ title: "Payments Recorded", description: `Successfully logged daily fees for ${paymentsToRecord.length} students.` });
+            toast({ title: "Payments Recorded", description: `Successfully logged payments for ${paymentsToRecord.length} records.` });
             setBulkDailyPaymentsSelection({});
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -953,12 +977,8 @@ function AdminDashboard() {
             if (!student) return;
 
             const updates: any = {};
-            if (categoryId === 'feeding') {
-                updates.dailyFeedingCost = newRate;
-            } else {
-                const otherFees = (student.dailyFees || []).filter(df => df.categoryId !== categoryId);
-                updates.dailyFees = [...otherFees, { categoryId, rate: newRate }];
-            }
+            const otherFees = (student.dailyFees || []).filter(df => df.categoryId !== categoryId);
+            updates.dailyFees = [...otherFees, { categoryId, rate: newRate }];
 
             await updateStudentDetails(db, storage, auth, student.id || studentId, updates, null, schoolId || undefined);
             
@@ -1045,31 +1065,20 @@ function AdminDashboard() {
         }
 
         setIsSubmitting(true);
-        // Use the Firestore document ID (docId) if available - this is the actual document path.
-        // student.studentId is the user-facing ID and may not match the Firestore doc path.
         const resolvedId = docId || studentId;
-        console.log(`[handleClearDailyFees] Clearing ${categoryName} (${categoryId}) for student. docId=${docId}, studentId=${studentId}, resolvedId=${resolvedId}, school=${targetSchoolId}`);
         
         try {
             const result = await voidFeeCategoryRecords(
                 db, 
                 auth, 
-                resolvedId,   // Use actual Firestore doc ID
+                resolvedId,
                 categoryId, 
                 categoryName, 
                 "Cleared from Daily Fee Category Page",
-                undefined     // Don't pass schoolId — resolvedId is already the direct document ID
+                undefined
             );
             
             const matchCount = typeof result === 'number' ? result : 0;
-            console.log(`[handleClearDailyFees] Successfully cleared ${matchCount} records.`);
-            if (matchCount === 0) {
-                toast({
-                    title: "No records found",
-                    variant: "destructive",
-                    description: `No active daily fee records found for ${categoryName} to clear.`,
-                });
-            }
             
             await fetchAdminData();
             
@@ -1086,12 +1095,6 @@ function AdminDashboard() {
                 });
             }
         } catch (error: any) {
-            console.error("[handleClearDailyFees] Error:", error);
-            toast({
-                title: "Error clearing fees",
-                variant: "destructive",
-                description: error instanceof Error ? error.message : "An unexpected error occurred.",
-            });
             toast({
                 title: "Error Clearing Records",
                 description: error.message || "Failed to clear records. Please try again.",
@@ -1132,7 +1135,6 @@ function AdminDashboard() {
         setIsSubmitting(true);
         try {
             if (editingStaffId) {
-                // Ensure no undefined values are sent to Firestore
                 const updates: any = {};
                 if (addStaffForm.name) updates.name = addStaffForm.name;
                 if (addStaffForm.role) updates.role = addStaffForm.role;
@@ -1194,7 +1196,8 @@ function AdminDashboard() {
                 startDate: '',
                 endDate: '',
                 vacationDate: '',
-                nextTermBegins: ''
+                nextTermBegins: '',
+                installmentPlan: []
             });
             setEditingPeriodId(null);
         } catch (error: any) {
@@ -1222,7 +1225,6 @@ function AdminDashboard() {
     const handleDeleteAcademicPeriod = async (periodId: string) => {
         if (!schoolId) return;
         if (!auth?.currentUser) {
-            console.error("No user signed in. Auth state:", auth);
             toast({ title: "Session Expired", description: "Please log in again to perform this action.", variant: 'destructive' });
             return;
         }
@@ -1235,7 +1237,6 @@ function AdminDashboard() {
             await fetchAdminData();
             toast({ title: "Term Deleted", description: "The academic period has been removed.", variant: 'destructive' });
         } catch (error: any) {
-            console.error("Delete Academic Period Error:", error);
             toast({ title: "Error", description: error.message || "Could not delete period.", variant: 'destructive' });
         } finally {
             setIsSubmitting(false);
@@ -1249,27 +1250,18 @@ function AdminDashboard() {
         if (!schoolId) return;
         setIsSubmitting(true);
         try {
-            // Destructure all fields, including the new ones
             const { 
                 name, schoolPhone, schoolEmail, momoNumber, momoName, 
-                bankAccounts, hubtelMerchantNumber, hubtelClientId, hubtelClientSecret,
-                sendexaApiToken, sendexaSenderId 
+                bankAccounts, hubtelSmsClientId, hubtelSmsClientSecret,
+                hubtelSenderId, hubtelPaymentClientId, hubtelPaymentClientSecret,
+                hubtelMerchantNumber, settingsPin 
             } = schoolSettingsForm;
             
-            // Pass all fields to the update function
             await updateSchoolDetails(db, storage, auth, schoolId, { 
-                name, 
-                schoolPhone, 
-                schoolEmail, 
-                momoNumber, 
-                momoName, 
-                bankAccounts,
-                hubtelMerchantNumber,
-                hubtelClientId,
-                hubtelClientSecret,
-                sendexaApiToken,
-                sendexaSenderId,
-                settingsPin: schoolSettingsForm.settingsPin
+                name, schoolPhone, schoolEmail, momoNumber, momoName, 
+                bankAccounts, hubtelSmsClientId, hubtelSmsClientSecret,
+                hubtelSenderId, hubtelPaymentClientId, hubtelPaymentClientSecret,
+                hubtelMerchantNumber, settingsPin 
             }, logoFile);
     
             await fetchAdminData();
@@ -1356,49 +1348,49 @@ function AdminDashboard() {
             });
         }
 
-        // --- SMS Sending Logic ---
-        if (communicationForm.sendAsSMS) {
-            toast({ title: "Sending SMS...", description: "Please wait." });
-            try {
-                const smsResponse = await fetch('/api/sms/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        schoolId: schoolId,
-                        // Use the message from the form for the SMS body
-                        message: communicationForm.message, 
-                        // Determine the recipient for the API
-                        recipient: communicationForm.recipient === 'all' ? 'all' : 'specific',
-                        specificParent: communicationForm.recipient !== 'all' ? communicationForm.recipient : undefined
-                    }),
-                });
+        // --- Push Notification & SMS Logic ---
+        toast({ title: communicationForm.sendAsSMS ? "Sending SMS & Notification..." : "Sending Notification...", description: "Please wait." });
+        try {
+            const smsResponse = await fetch('/api/sms/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    schoolId: schoolId,
+                    // Use the message from the form for the body
+                    message: communicationForm.message, 
+                    // Determine the recipient for the API
+                    recipient: communicationForm.recipient === 'all' ? 'all' : 'specific',
+                    specificParent: communicationForm.recipient !== 'all' ? communicationForm.recipient : undefined,
+                    notificationOnly: !communicationForm.sendAsSMS
+                }),
+            });
 
-                const smsResult = await smsResponse.json();
+            const smsResult = await smsResponse.json();
 
-                if (smsResponse.ok) {
-                    toast({
-                        title: "SMS Sent Successfully",
-                        description: smsResult.message || `SMS was sent to the selected recipients.`,
-                        variant: "default"
-                    });
-                } else {
-                     toast({
-                        title: "SMS Sending Failed",
-                        description: smsResult.error || "The SMS could not be sent. Please check your Sendexa credentials in Settings and try again.",
-                        variant: "destructive",
-                        duration: 10000
-                    });
-                }
-            } catch (error: any) {
-                console.error("Failed to make SMS API request:", error);
+            if (smsResponse.ok) {
                 toast({
-                    title: "SMS API Error",
-                    description: "A network or server error occurred while trying to send the SMS.",
+                    title: communicationForm.sendAsSMS ? "SMS & Notification Sent" : "Notification Sent",
+                    description: smsResult.message || `Message was sent successfully.`,
+                    variant: "default"
+                });
+            } else {
+                    toast({
+                    title: "Sending Failed",
+                    description: smsResult.error || "The message could not be sent. Please check your credentials and try again.",
                     variant: "destructive",
                     duration: 10000
                 });
             }
+        } catch (error: any) {
+            console.error("Failed to make API request:", error);
+            toast({
+                title: "API Error",
+                description: "A network or server error occurred while trying to send the message.",
+                variant: "destructive",
+                duration: 10000
+            });
         }
+
 
         // Reset the form only if at least one operation was attempted
         if (announcementSent || communicationForm.sendAsSMS) {
@@ -1510,7 +1502,7 @@ function AdminDashboard() {
 
 
     const ledgerTotals = useMemo(() => {
-        if (!selectedStudent) return { billed: 0, paid: 0, balance: 0 };
+        if (!selectedStudent) return { billed: 0, paid: 0, balance: 0, expected: 0, installmentBalance: 0 };
         
         const isDailySubTab = feesActiveSubTab === 'daily';
         
@@ -1539,9 +1531,17 @@ function AdminDashboard() {
             return acc;
         }, { billed: balanceBF > 0 ? balanceBF : 0, paid: balanceBF < 0 ? Math.abs(balanceBF) : 0 });
 
+        const currentPeriod = academicPeriods.find(p => p.id === selectedPeriodId);
+        let expected = totals.billed;
+        if (!isDailySubTab && currentPeriod) {
+            expected = calculateInstallmentExpectedAmount(selectedStudent, currentPeriod, feeCategories);
+        }
+
         return { 
             ...totals, 
-            balance: totals.billed - totals.paid 
+            balance: totals.billed - totals.paid,
+            expected,
+            installmentBalance: Math.max(0, expected - totals.paid)
         };
     }, [selectedStudent, selectedPeriodId, feeCategories, academicPeriods, feesActiveSubTab]);
 
@@ -1616,16 +1616,117 @@ function AdminDashboard() {
     }, [overallTotals, studentsByClass, selectedPeriodId]);
 
     const families = useMemo(() => {
-        const familyGroups: Record<string, Student[]> = {};
+        const familyGroups: Record<string, { 
+            children: (Student & { ledgerBalance: number })[], 
+            ledger: (LedgerTransaction & { studentName: string })[], 
+            totals: { 
+                main: { billed: number, paid: number }, 
+                daily: { billed: number, paid: number }, 
+                balance: number,
+                expected: number,
+                installmentBalance: number
+            } 
+        }> = {};
+        
+        const currentPeriod = academicPeriods.find(p => p.id === selectedPeriodId);
+
         students.forEach(student => {
             const pid = student.parentId?.trim().toUpperCase();
-            if (pid) {
-                if (!familyGroups[pid]) familyGroups[pid] = [];
-                familyGroups[pid].push(student);
+            if (!pid) return;
+
+            if (!familyGroups[pid]) {
+                familyGroups[pid] = { 
+                    children: [], 
+                    ledger: [],
+                    totals: {
+                        main: { billed: 0, paid: 0 },
+                        daily: { billed: 0, paid: 0 },
+                        balance: 0,
+                        expected: 0,
+                        installmentBalance: 0
+                    }
+                };
             }
+            
+            const family = familyGroups[pid];
+            const studentWithBalance = { ...student, ledgerBalance: 0 };
+            family.children.push(studentWithBalance);
+
+            // 1. Ledger-based Main/Daily calculations
+            const fullLedger = (student.ledger || []).filter(t => !t.isVoided);
+            const sortedPeriodsForIndex = [...academicPeriods].reverse();
+            const currentPeriodIndex = sortedPeriodsForIndex.findIndex(p => p.id === selectedPeriodId);
+
+            const dailyLedger = fullLedger.filter(t => isDailyTransaction(t, feeCategories));
+            const mainLedger = fullLedger.filter(t => !isDailyTransaction(t, feeCategories));
+
+            const getPeriodBalances = (ledger: LedgerTransaction[]) => {
+                const prevTransactions = ledger.filter(t => {
+                    if (!t.periodId) return false;
+                    const tPeriodIndex = sortedPeriodsForIndex.findIndex(p => p.id === t.periodId);
+                    return tPeriodIndex < currentPeriodIndex && t.periodId !== selectedPeriodId;
+                });
+
+                const bf = prevTransactions.reduce((sum, t) => sum + (Number(t.debit) || 0) - (Number(t.credit) || 0), 0);
+                const currentTransactions = ledger.filter(t => !selectedPeriodId || t.periodId === selectedPeriodId);
+                
+                const billed = currentTransactions.reduce((sum, t) => sum + (Number(t.debit) || 0), 0);
+                const paid = currentTransactions.reduce((sum, t) => sum + (Number(t.credit) || 0), 0);
+                
+                const adminBilled = (bf > 0 ? bf : 0) + billed;
+                const adminPaid = (bf < 0 ? Math.abs(bf) : 0) + paid;
+                const balance = adminBilled - adminPaid;
+
+                return { bf, billed: adminBilled, paid: adminPaid, balance };
+            };
+
+            const dailyData = getPeriodBalances(dailyLedger);
+            const mainData = getPeriodBalances(mainLedger);
+
+            // 2. Attendance-based daily accrued (matches student ledger view)
+            const attendance = student.attendance || [];
+            const daysPresentInPeriod = attendance.filter(a => a.attended && (!selectedPeriodId || a.periodId === selectedPeriodId)).length;
+            let dailyAccruedInfo = 0;
+            feeCategories.filter(c => c.isDaily).forEach(cat => {
+                const studentRate = (student.dailyFees || []).find(f => f.categoryId === cat.id)?.rate || 0;
+                dailyAccruedInfo += daysPresentInPeriod * Number(studentRate);
+            });
+
+            const childBalance = mainData.balance + dailyAccruedInfo;
+            studentWithBalance.ledgerBalance = childBalance;
+
+            // 3. Installment Logic per student
+            if (currentPeriod) {
+                const installment = calculateInstallmentExpectedAmount(student, currentPeriod, feeCategories);
+                family.totals.expected += installment;
+            } else {
+                family.totals.expected += mainData.billed;
+            }
+
+            family.totals.main.billed += mainData.billed;
+            family.totals.main.paid += mainData.paid;
+            family.totals.daily.billed += dailyAccruedInfo;
+            family.totals.daily.paid += dailyData.paid;
+            family.totals.balance += childBalance;
+
+            // 4. Collect transactions for family ledger
+            const childTransactions = (student.ledger || [])
+                .filter(t => !t.isVoided && (!selectedPeriodId || t.periodId === selectedPeriodId))
+                .map(t => ({ ...t, studentName: student.name }));
+            family.ledger.push(...childTransactions);
         });
+
+        // Finalize family-level installment balance
+        Object.values(familyGroups).forEach(f => {
+            f.totals.installmentBalance = Math.max(0, f.totals.expected - f.totals.main.paid);
+            
+            // Sort family ledgers by date
+            f.ledger.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            f.ledger = f.ledger.slice(0, 10); // Keep last 10 for performance/visibility
+        });
+
         return familyGroups;
-    }, [students]);
+    }, [students, selectedPeriodId, academicPeriods, feeCategories]);
 
     const expenditureTotals = useMemo(() => {
         return expenditures.reduce((acc, exp) => {
@@ -1664,7 +1765,8 @@ function AdminDashboard() {
             balance: number,
             status: 'Paid' | 'Partially Paid' | 'Unpaid',
             studentId: string,
-            docId: string
+            docId: string,
+            profilePicture?: string
         }[] = [];
 
         // Identify the "real" feeding category if it exists in the database
@@ -1721,7 +1823,7 @@ function AdminDashboard() {
                 if (balance <= 0 && totalBilled > 0) status = 'Paid';
                 else if (totalPaid > 0 && totalPaid < totalBilled) status = 'Partially Paid';
                 
-                if (totalBilled > 0 || totalPaid > 0 || relevantTransactions.length > 0) {
+                if (totalBilled > 0 || totalPaid > 0 || relevantTransactions.length > 0 || rate > 0) {
                     summary.push({
                         studentName: student.name,
                         className: student.className || 'Unassigned',
@@ -1734,25 +1836,22 @@ function AdminDashboard() {
                         balance,
                         status,
                         studentId: student.studentId,
-                        docId: student.id || student.studentId
+                        docId: student.id || student.studentId,
+                        profilePicture: student.profilePicture
                     });
                 }
             };
 
-            // 1. Process Feeding Fee specifically using canonical 'feeding' ID
-            processCategory('Feeding Fee', 'feeding', Number(student.dailyFeedingCost) || 0);
-
-            // 2. Process other dynamic daily fee categories
+            // Process all dynamic daily fee categories using the official category list
             feeCategories.filter(c => c.isDaily).forEach(cat => {
                 const normName = cat.name.toLowerCase().trim();
-                const normId = cat.id.toLowerCase().trim();
+                const normId = cat.id;
                 
-                // Skip if it's a variant of the main feeding fee which we processed above
-                if (normName === 'feeding fee' || normName === 'feeding' || normId === 'feeding' || (dynamicFeedingId && normId === dynamicFeedingId)) return;
-
+                // Find student's assigned rate for this category
                 const studentRate = (student.dailyFees || []).find(f => 
-                    (f.categoryId && f.categoryId === cat.id)
+                    f.categoryId === normId
                 )?.rate || 0;
+
                 processCategory(cat.name, cat.id, Number(studentRate));
             });
         });
@@ -1800,7 +1899,6 @@ function AdminDashboard() {
     }
 
     return (
-        <TooltipProvider>
             <>
                 <div className="h-screen w-full flex bg-background text-foreground overflow-hidden">
                     <AdminSidebar
@@ -2163,16 +2261,44 @@ function AdminDashboard() {
                                                             </TableCell>
                                                             <TableCell>{student.className}</TableCell>
                                                             <TableCell className="text-right">
-                                                                <DropdownMenu>
-                                                                    <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                                                                    <DropdownMenuContent align="end">
-                                                                        <DropdownMenuItem onClick={() => handleOpenViewDialog(student)}><Eye className="mr-2 h-4 w-4" /> View Details</DropdownMenuItem>
-                                                                        <DropdownMenuItem onClick={() => handleOpenEditDialog(student)}><Edit className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
-                                                                        <DropdownMenuItem onClick={() => handleSelectStudentForFeeds(student.studentId)}><Wallet className="mr-2 h-4 w-4"/> Manage All Fees</DropdownMenuItem>
-                                                                        <DropdownMenuSeparator />
-                                                                        <DropdownMenuItem className="text-destructive" onClick={() => handleArchiveStudent(student)}><Archive className="mr-2 h-4 w-4" /> Archive</DropdownMenuItem>
-                                                                    </DropdownMenuContent>
-                                                                </DropdownMenu>
+                                                                <div className="flex items-center justify-end gap-1">
+                                                                    <TooltipProvider>
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <Button 
+                                                                                    variant="ghost" 
+                                                                                    size="icon" 
+                                                                                    className={cn("h-8 w-8", student.muteReminders ? "text-amber-600 hover:text-amber-700 hover:bg-amber-50" : "text-slate-400 hover:text-primary")}
+                                                                                    onClick={() => handleToggleMuteReminders(student)}
+                                                                                >
+                                                                                    {student.muteReminders ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+                                                                                </Button>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent>
+                                                                                <p>{student.muteReminders ? "Reminders Muted - Click to restore" : "Reminders Active - Click to mute"}</p>
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                    </TooltipProvider>
+
+                                                                    <DropdownMenu>
+                                                                        <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                                                                        <DropdownMenuContent align="end">
+                                                                            <DropdownMenuItem onClick={() => handleOpenViewDialog(student)}><Eye className="mr-2 h-4 w-4" /> View Details</DropdownMenuItem>
+                                                                            <DropdownMenuItem onClick={() => handleOpenEditDialog(student)}><Edit className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
+                                                                            <DropdownMenuItem onClick={() => handleSelectStudentForFeeds(student.studentId)}><Wallet className="mr-2 h-4 w-4"/> Manage All Fees</DropdownMenuItem>
+                                                                            <DropdownMenuSeparator />
+                                                                            <DropdownMenuItem 
+                                                                                onClick={() => handleToggleMuteReminders(student)}
+                                                                                className={student.muteReminders ? "text-primary" : "text-amber-600"}
+                                                                            >
+                                                                                {student.muteReminders ? <Bell className="mr-2 h-4 w-4" /> : <BellOff className="mr-2 h-4 w-4" />}
+                                                                                {student.muteReminders ? "Enable Reminders" : "Mute Reminders"}
+                                                                            </DropdownMenuItem>
+                                                                            <DropdownMenuSeparator />
+                                                                            <DropdownMenuItem className="text-destructive" onClick={() => handleArchiveStudent(student)}><Archive className="mr-2 h-4 w-4" /> Archive</DropdownMenuItem>
+                                                                        </DropdownMenuContent>
+                                                                    </DropdownMenu>
+                                                                </div>
                                                             </TableCell>
                                                         </TableRow>
                                                     ))}
@@ -2191,89 +2317,197 @@ function AdminDashboard() {
                         )}
                         
                         {activeTab === 'families' && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-heading-md">Family Groupings</CardTitle>
-                                    <CardDescription>View families and aggregated fee records grouped by Parent ID.</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    {Object.keys(families).length === 0 ? (
-                                        <div className="text-center py-12 text-muted-foreground">No families have been grouped yet. Assign a Parent ID to students to group them.</div>
-                                    ) : (
-                                        <div className="space-y-8">
-                                            {Object.entries(families).map(([parentId, children]) => {
-                                                const generalBilled = children.reduce((sum, child) => sum + (child.generalFees || []).reduce((s, f) => s + Number(f.amount || 0), 0), 0);
-                                                const generalPaid = children.reduce((sum, child) => sum + (child.generalPayments || []).reduce((s, p) => s + p.amount, 0), 0);
-                                                const generalBalance = generalBilled - generalPaid;
+                            <div className="space-y-6">
+                                {/* Glassmorphic Header Card - Light Mode */}
+                                <div className="relative overflow-hidden rounded-3xl border border-white bg-white/60 p-8 shadow-xl backdrop-blur-xl">
+                                    <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
+                                    <div className="absolute -left-20 -bottom-20 h-64 w-64 rounded-full bg-blue-500/5 blur-3xl" />
+                                    <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                        <div>
+                                            <h2 className="text-3xl font-black tracking-tight text-slate-900 mb-2">Family Financial Portals</h2>
+                                            <p className="text-slate-600 font-medium max-w-md">
+                                                Comprehensive financial oversight for family groups. Track aggregated balances, fee distributions, and payment histories across all siblings.
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-4 bg-white/40 p-4 rounded-2xl border border-white shadow-sm backdrop-blur-md">
+                                            <div className="p-3 bg-primary/10 rounded-xl">
+                                                <Users className="w-8 h-8 text-primary" />
+                                            </div>
+                                            <div>
+                                                <div className="text-xs font-bold text-slate-600 uppercase tracking-widest mb-1">Total Families</div>
+                                                <div className="text-3xl font-black text-slate-900">{Object.keys(families).length}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
 
-                                                const transportBilled = children.reduce((sum, child) => sum + Number(child.transportationCost || 0), 0);
-                                                const transportPaid = children.reduce((sum, child) => sum + (child.transportationPayments || []).reduce((s, p) => s + p.amount, 0), 0);
-                                                const transportBalance = transportBilled - transportPaid;
-
-                                                const feedingPaid = children.reduce((sum, child) => sum + (child.feedingFeePayments || []).reduce((s, p) => s + p.amount, 0), 0);
-                                                const feedingDeducted = children.reduce((sum, child) => {
-                                                    const attendedDays = (child.attendance || []).filter(a => a.attended).length;
-                                                    return sum + (attendedDays * (Number(child.dailyFeedingCost) || 0));
-                                                }, 0);
-                                                const feedingBalance = feedingPaid - feedingDeducted;
-                                                const feedingArrears = feedingBalance < 0 ? Math.abs(feedingBalance) : 0;
-
-                                                const dailyDeducted = children.reduce((sum, child) => {
-                                                    const attendedDays = (child.attendance || []).filter(a => a.attended).length;
-                                                    const childDailyRate = (child.dailyFees || []).reduce((s, df) => s + (df.rate || 0), 0);
-                                                    return sum + (attendedDays * childDailyRate);
-                                                }, 0);
-                                                const totalArrears = (generalBalance > 0 ? generalBalance : 0) + (transportBalance > 0 ? transportBalance : 0) + feedingArrears + dailyDeducted;
-
-                                                return (
-                                                    <Card key={parentId} className="border border-primary/20 bg-primary/5">
-                                                        <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between pb-2 gap-4 md:gap-0">
-                                                            <div>
-                                                                <CardTitle className="text-heading-md flex items-center gap-2"><Users className="w-5 h-5 text-primary"/> Family ID: {parentId}</CardTitle>
-                                                                <CardDescription>Guardian: {children[0].parentName} ({children[0].parentPhone})</CardDescription>
-                                                            </div>
-                                                            <div className="text-left md:text-right">
-                                                                <div className="text-sm text-muted-foreground">Total Family Arrears</div>
-                                                                <div className={cn("font-bold text-xl", totalArrears > 0 ? "text-destructive" : "text-success")}>
-                                                                    GH¢{(totalArrears || 0).toFixed(2)}
+                                {Object.keys(families).length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-20 bg-white/40 rounded-3xl border border-dashed border-slate-200 shadow-sm">
+                                        <Users className="w-16 h-16 text-slate-400 mb-4" />
+                                        <p className="text-xl font-medium text-slate-600">No family groupings found.</p>
+                                        <p className="text-sm text-slate-500">Assign Parent IDs to students to enable family-wide reporting.</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 gap-8">
+                                        {Object.entries(families).map(([parentId, familyData]) => {
+                                            const { children, totals } = familyData;
+                                            const guardian = children[0];
+                                            
+                                            return (
+                                                <div key={parentId} className="group relative transition-all duration-500 hover:-translate-y-1">
+                                                    <div className="absolute -inset-0.5 rounded-[2rem] bg-gradient-to-br from-primary/20 to-blue-600/20 opacity-0 blur transition duration-500 group-hover:opacity-100" />
+                                                    <div className="relative flex flex-col rounded-[2rem] border border-white bg-white/90 shadow-2xl backdrop-blur-xl overflow-hidden">
+                                                        {/* Family Card Header */}
+                                                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between p-8 border-b border-slate-100 bg-slate-50/30">
+                                                            <div className="flex items-center gap-5">
+                                                                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg shadow-slate-200 border border-slate-200 transition-transform group-hover:scale-110 duration-500">
+                                                                    <Users className="h-8 w-8 text-primary" />
                                                                 </div>
-                                                            </div>
-                                                        </CardHeader>
-                                                        <CardContent>
-                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                                                                <div className="p-3 bg-card border rounded-md shadow-sm">
-                                                                    <div className="text-sm font-semibold text-muted-foreground flex items-center gap-1 mb-1"><BookCopy className="w-4 h-4"/> General Fees</div>
-                                                                    <div className="flex justify-between text-xs mb-1"><span>Billed:</span> <span>GH¢{(generalBilled || 0).toFixed(2)}</span></div>
-                                                                    <div className={cn("text-lg font-bold mt-2", generalBalance > 0 ? "text-destructive" : "text-success")}>GH¢{(generalBalance || 0).toFixed(2)} {generalBalance > 0 ? 'Due' : 'Balance'}</div>
-                                                                </div>
-                                                                <div className="p-3 bg-card border rounded-md shadow-sm">
-                                                                    <div className="text-sm font-semibold text-muted-foreground flex items-center gap-1 mb-1"><Bus className="w-4 h-4"/> Transportation</div>
-                                                                    <div className="flex justify-between text-xs mb-1"><span>Billed:</span> <span>GH¢{(transportBilled || 0).toFixed(2)}</span></div>
-                                                                    <div className={cn("text-lg font-bold mt-2", transportBalance > 0 ? "text-destructive" : "text-success")}>GH¢{(transportBalance || 0).toFixed(2)} {transportBalance > 0 ? 'Due' : 'Balance'}</div>
-                                                                </div>
-                                                                <div className="p-3 bg-card border rounded-md shadow-sm">
-                                                                    <div className="text-sm font-semibold text-muted-foreground flex items-center gap-1 mb-1"><UtensilsCrossed className="w-4 h-4"/> Feeding Costs</div>
-                                                                    <div className="flex justify-between text-xs mb-1"><span>Deducted based on attendance:</span> <span>GH¢{(feedingDeducted || 0).toFixed(2)}</span></div>
-                                                                    <div className={cn("text-lg font-bold mt-2", feedingArrears > 0 ? "text-destructive" : "text-success")}>GH¢{(feedingArrears || 0).toFixed(2)} Arrears</div>
-                                                                </div>
-                                                                <div className="p-3 bg-card border rounded-md shadow-sm">
-                                                                    <div className="text-sm font-semibold text-muted-foreground flex items-center gap-1 mb-1"><CalendarDays className="w-4 h-4"/> Other Daily Fees</div>
-                                                                    <div className="flex justify-between text-xs mb-1"><span>Deducted based on attendance:</span> <span>GH¢{(dailyDeducted || 0).toFixed(2)}</span></div>
-                                                                    <div className={cn("text-lg font-bold mt-2", dailyDeducted > 0 ? "text-destructive" : "text-success")}>GH¢{(dailyDeducted || 0).toFixed(2)} Arrears</div>
+                                                                <div>
+                                                                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">Family: {parentId}</h3>
+                                                                    <div className="flex items-center gap-3 mt-1">
+                                                                        <span className="flex items-center gap-1 text-sm text-slate-600 font-bold bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm">
+                                                                            <Users className="w-3.5 h-3.5" /> {children.length} {children.length === 1 ? 'Child' : 'Children'}
+                                                                        </span>
+                                                                        <span className="text-slate-400 text-sm">•</span>
+                                                                        <span className="text-sm text-slate-600 font-bold italic">Guardian: {guardian.parentName}</span>
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                            <div className="overflow-x-auto">
+                                                            <div className="mt-6 md:mt-0 text-left md:text-right">
+                                                                <div className="text-xs font-black text-slate-800 uppercase tracking-widest mb-1">Combined Arrears</div>
+                                                                <div className={cn(
+                                                                    "text-4xl font-black tracking-tighter transition-colors duration-300",
+                                                                    totals.balance > 0 ? "text-red-500" : "text-emerald-500"
+                                                                )}>
+                                                                    GH¢{Math.abs(totals.balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                                    <span className="text-lg ml-2 opacity-60 font-black tracking-normal">
+                                                                        {totals.balance > 0 ? 'DUE' : 'BAL'}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <CardContent className="p-8">
+                                                            {/* Financial Breakdown Grid */}
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                                                                {/* Main Fees Card */}
+                                                                <div className="relative overflow-hidden rounded-2xl bg-slate-50/50 border border-slate-100 p-6 transition-all hover:bg-white hover:shadow-md group/card">
+                                                                    <div className="flex items-center justify-between mb-4">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className="p-2 bg-blue-50 rounded-lg text-blue-600 border border-blue-100">
+                                                                                <Landmark className="w-5 h-5" />
+                                                                            </div>
+                                                                            <span className="font-bold text-slate-700 tracking-tight">Main School Fees</span>
+                                                                        </div>
+                                                                        <Badge variant="outline" className="border-blue-200 text-blue-600 bg-blue-50/50">
+                                                                            Aggregated
+                                                                        </Badge>
+                                                                    </div>
+                                                                    <div className="space-y-3">
+                                                                        <div className="flex justify-between items-center text-sm">
+                                                                            <span className="text-slate-700 font-semibold">Total Billed</span>
+                                                                            <span className="text-slate-900 font-black">GH¢{totals.main.billed.toFixed(2)}</span>
+                                                                        </div>
+                                                                        {academicPeriods.find(p => p.id === selectedPeriodId)?.installmentPlan?.length ? (
+                                                                            <div className="flex justify-between items-center text-sm">
+                                                                                <span className="text-slate-700 font-semibold text-[10px] uppercase tracking-wider">Expected by Now</span>
+                                                                                <span className="text-slate-900 font-black">GH¢{totals.expected.toFixed(2)}</span>
+                                                                            </div>
+                                                                        ) : null}
+                                                                        <div className="flex justify-between items-center text-sm pb-3 border-b border-slate-100">
+                                                                            <span className="text-slate-700 font-semibold">Total Paid</span>
+                                                                            <span className="text-emerald-600 font-black">GH¢{totals.main.paid.toFixed(2)}</span>
+                                                                        </div>
+                                                                        <div className="flex justify-between items-center pt-1">
+                                                                            <div className="flex flex-col">
+                                                                                <span className="text-xs font-black text-slate-600 uppercase tracking-wider">Net Main Balance</span>
+                                                                                {totals.installmentBalance > 0 && (
+                                                                                    <span className="text-[10px] text-amber-600 font-bold">Installment Shortfall: GH¢{totals.installmentBalance.toFixed(2)}</span>
+                                                                                )}
+                                                                            </div>
+                                                                            <span className={cn(
+                                                                                "font-black text-lg",
+                                                                                (totals.main.billed - totals.main.paid) > 0 ? "text-red-500" : "text-emerald-600"
+                                                                            )}>
+                                                                                GH¢{Math.abs(totals.main.billed - totals.main.paid).toFixed(2)}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Daily Fees Card */}
+                                                                <div className="relative overflow-hidden rounded-2xl bg-slate-50/50 border border-slate-100 p-6 transition-all hover:bg-white hover:shadow-md group/card">
+                                                                    <div className="flex items-center justify-between mb-4">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className="p-2 bg-amber-50 rounded-lg text-amber-600 border border-amber-100">
+                                                                                <UtensilsCrossed className="w-5 h-5" />
+                                                                            </div>
+                                                                            <span className="font-bold text-slate-700 tracking-tight">Daily Fees Accrued</span>
+                                                                        </div>
+                                                                        <Badge variant="outline" className="border-amber-200 text-amber-600 bg-amber-50/50">
+                                                                            Attendance Based
+                                                                        </Badge>
+                                                                    </div>
+                                                                    <div className="space-y-3">
+                                                                        <div className="flex justify-between items-center text-sm">
+                                                                            <span className="text-slate-700 font-semibold">Total Accrued</span>
+                                                                            <span className="text-slate-900 font-black">GH¢{totals.daily.billed.toFixed(2)}</span>
+                                                                        </div>
+                                                                        <div className="flex justify-between items-center text-sm pb-3 border-b border-slate-100">
+                                                                            <span className="text-slate-700 font-semibold">Total Paid</span>
+                                                                            <span className="text-emerald-600 font-black">GH¢{totals.daily.paid.toFixed(2)}</span>
+                                                                        </div>
+                                                                        <div className="flex justify-between items-center pt-1">
+                                                                            <span className="text-xs font-black text-slate-700 uppercase tracking-wider">Net Daily Balance</span>
+                                                                            <span className={cn(
+                                                                                "font-black text-lg",
+                                                                                (totals.daily.billed - totals.daily.paid) > 0 ? "text-red-500" : "text-emerald-600"
+                                                                            )}>
+                                                                                GH¢{Math.abs(totals.daily.billed - totals.daily.paid).toFixed(2)}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Children List Table */}
+                                                            <div className="rounded-2xl border border-slate-100 bg-white overflow-hidden shadow-sm">
                                                                 <Table>
-                                                                    <TableHeader><TableRow><TableHead>Child Name</TableHead><TableHead>Class</TableHead><TableHead>Student ID</TableHead><TableHead></TableHead></TableRow></TableHeader>
+                                                                    <TableHeader className="bg-slate-200">
+                                                                        <TableRow className="hover:bg-transparent border-slate-300">
+                                                                            <TableHead className="text-slate-800 font-black uppercase tracking-widest text-[10px] h-10 px-6">Child Name & Class</TableHead>
+                                                                            <TableHead className="text-slate-800 font-black uppercase tracking-widest text-[10px] h-10 text-right">Balance</TableHead>
+                                                                            <TableHead className="text-slate-800 font-black uppercase tracking-widest text-[10px] h-10 text-right pr-6">Action</TableHead>
+                                                                        </TableRow>
+                                                                    </TableHeader>
                                                                     <TableBody>
-                                                                        {children.map(child => (
-                                                                            <TableRow key={child.studentId}>
-                                                                                <TableCell className="font-medium">{child.name}</TableCell>
-                                                                                <TableCell>{child.className}</TableCell>
-                                                                                <TableCell>{child.studentId}</TableCell>
-                                                                                <TableCell>
-                                                                                    <Button variant="ghost" size="sm" onClick={() => { setActiveTab('students'); setSelectedStudentForView(child); setIsViewDialogOpen(true); }}>
-                                                                                        <Eye className="h-4 w-4 mr-2" /> View
+                                                                        {children.map((student) => (
+                                                                            <TableRow key={student.studentId} className="border-b border-slate-300 last:border-0 hover:bg-slate-50/50 transition-colors">
+                                                                                <TableCell className="py-4 px-6">
+                                                                                    <div className="flex flex-col">
+                                                                                        <span className="font-bold text-slate-800">{student.name}</span>
+                                                                                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{student.className}</span>
+                                                                                    </div>
+                                                                                </TableCell>
+                                                                                <TableCell className="text-right py-4">
+                                                                                    <div className="flex flex-col items-end">
+                                                                                        <span className="text-sm font-black text-slate-900">GH¢{(student.ledgerBalance || 0).toFixed(2)}</span>
+                                                                                        <span className="text-[10px] text-slate-400 font-medium italic">Current Balance</span>
+                                                                                    </div>
+                                                                                </TableCell>
+                                                                                <TableCell className="text-right py-4 pr-6">
+                                                                                    <Button 
+                                                                                        variant="ghost" 
+                                                                                        size="sm" 
+                                                                                        className="h-8 px-3 text-primary hover:text-primary hover:bg-primary/5 font-bold rounded-lg"
+                                                                                        onClick={() => { 
+                                                                                            setActiveTab('students'); 
+                                                                                            setSelectedStudentForView(student); 
+                                                                                            setIsViewDialogOpen(true); 
+                                                                                        }}
+                                                                                    >
+                                                                                        Detail View
                                                                                     </Button>
                                                                                 </TableCell>
                                                                             </TableRow>
@@ -2281,14 +2515,63 @@ function AdminDashboard() {
                                                                     </TableBody>
                                                                 </Table>
                                                             </div>
+
+                                                            {/* Consolidated Family Activity - Collapsible */}
+                                                            {familyData.ledger.length > 0 && (
+                                                                <div className="mt-8 pt-8 border-t border-slate-100">
+                                                                    <button 
+                                                                        onClick={() => setExpandedFamilies(prev => ({ ...prev, [parentId]: !prev[parentId] }))}
+                                                                        className="flex items-center justify-between w-full group/toggle hover:bg-slate-100 p-3 rounded-xl transition-all border border-slate-100"
+                                                                    >
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Receipt className="w-5 h-5 text-slate-500 group-hover/toggle:text-primary transition-colors" />
+                                                                            <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest group-hover/toggle:text-primary transition-colors">
+                                                                                {expandedFamilies[parentId] ? 'Hide Recent Activity' : 'Show Recent Activity'}
+                                                                            </h4>
+                                                                        </div>
+                                                                        <ChevronDown className={cn(
+                                                                            "w-6 h-6 text-slate-800 transition-transform duration-300",
+                                                                            expandedFamilies[parentId] && "rotate-180 text-primary"
+                                                                        )} />
+                                                                    </button>
+
+                                                                    {expandedFamilies[parentId] && (
+                                                                        <div className="space-y-4 mt-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                                            {familyData.ledger.map((t, idx) => (
+                                                                                <div key={`${t.id}-${idx}`} className="flex items-center justify-between py-4 border-b border-slate-300 last:border-0">
+                                                                                    <div className="flex items-center gap-4">
+                                                                                        <div className="text-[11px] font-black text-slate-700 w-16">
+                                                                                            {new Date(t.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                                                                                        </div>
+                                                                                        <div className="flex flex-col">
+                                                                                            <span className="text-sm font-black text-slate-900 tracking-tight">
+                                                                                                {t.description}
+                                                                                            </span>
+                                                                                            <span className="text-[10px] font-black text-slate-600 uppercase">
+                                                                                                {t.studentName} • {t.type === 'payment' ? 'Payment' : 'Charge'}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className={cn(
+                                                                                        "text-base font-black tabular-nums",
+                                                                                        t.credit > 0 ? "text-emerald-600" : "text-red-500"
+                                                                                    )}>
+                                                                                        {t.credit > 0 ? '+' : '-' }GH¢{(t.credit || t.debit).toFixed(2)}
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                         </CardContent>
-                                                    </Card>
-                                                )
-                                            })}
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
                         )}
                         
                         {activeTab === 'fees' && (
@@ -2336,11 +2619,11 @@ function AdminDashboard() {
 
                                                 {feesActiveSubTab === 'main' && (
                                                     <Button
-                                                        onClick={() => { setFeesActiveSubTab('daily'); setDailyFeeInternalTab('record'); }}
+                                                        onClick={() => setFeesActiveSubTab('daily')}
                                                         className="h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 flex items-center gap-2 group transition-all"
                                                     >
                                                         <CalendarIcon className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                                        Daily Bulk Operations
+                                                        Daily Fee Management
                                                     </Button>
                                                 )}
                                                 {feesActiveSubTab === 'daily' && (
@@ -2431,13 +2714,40 @@ function AdminDashboard() {
                                                 </div>
                                                 <TrendingDown className="w-8 h-8 text-blue-500/30" />
                                             </div>
-                                            <div className="flex items-center justify-between p-5 bg-emerald-50/50 border-4 border-emerald-500 rounded-2xl shadow-md transition-all hover:shadow-lg">
-                                                <div>
-                                                    <p className="text-label-caps text-emerald-600/80 mb-0.5">Total Paid</p>
-                                                    <p className="text-xl font-bold text-emerald-900 text-numeric">GH¢{(ledgerTotals.paid || 0).toFixed(2)}</p>
+                                            
+                                            {feesActiveSubTab === 'main' && academicPeriods.find(p => p.id === selectedPeriodId)?.installmentPlan?.length ? (
+                                                <div className={cn(
+                                                    "flex items-center justify-between p-5 border-4 rounded-2xl shadow-md transition-all hover:shadow-lg",
+                                                    ledgerTotals.installmentBalance > 0 ? "bg-amber-50 border-amber-500" : "bg-emerald-50 border-emerald-500"
+                                                )}>
+                                                    <div>
+                                                        <p className={cn(
+                                                            "text-[10px] font-black uppercase tracking-widest mb-0.5",
+                                                            ledgerTotals.installmentBalance > 0 ? "text-amber-600/80" : "text-emerald-600/80"
+                                                        )}>Expected by Now</p>
+                                                        <p className={cn(
+                                                            "text-xl font-bold text-numeric",
+                                                            ledgerTotals.installmentBalance > 0 ? "text-amber-900" : "text-emerald-900"
+                                                        )}>GH¢{(ledgerTotals.expected || 0).toFixed(2)}</p>
+                                                        {ledgerTotals.installmentBalance > 0 && (
+                                                            <p className="text-[10px] text-amber-700 font-bold mt-1">Shortfall: GH¢{ledgerTotals.installmentBalance.toFixed(2)}</p>
+                                                        )}
+                                                    </div>
+                                                    <CalendarDays className={cn(
+                                                        "w-8 h-8",
+                                                        ledgerTotals.installmentBalance > 0 ? "text-amber-500/30" : "text-emerald-500/30"
+                                                    )} />
                                                 </div>
-                                                <Banknote className="w-8 h-8 text-emerald-500/30" />
-                                            </div>
+                                            ) : (
+                                                <div className="flex items-center justify-between p-5 bg-emerald-50/50 border-4 border-emerald-500 rounded-2xl shadow-md transition-all hover:shadow-lg">
+                                                    <div>
+                                                        <p className="text-label-caps text-emerald-600/80 mb-0.5">Total Paid</p>
+                                                        <p className="text-xl font-bold text-emerald-900 text-numeric">GH¢{(ledgerTotals.paid || 0).toFixed(2)}</p>
+                                                    </div>
+                                                    <Banknote className="w-8 h-8 text-emerald-500/30" />
+                                                </div>
+                                            )}
+
                                             <div className={cn(
                                                 "flex items-center justify-between p-5 border-4 rounded-2xl shadow-md transition-all hover:shadow-lg",
                                                 ledgerTotals.balance > 0 ? "bg-red-50 border-red-500" : "bg-emerald-50 border-emerald-500"
@@ -2530,9 +2840,9 @@ function AdminDashboard() {
                                                         variant="outline" 
                                                         size="sm" 
                                                         className="h-8 text-[10px] font-black uppercase border-primary/30 hover:bg-primary hover:text-primary-foreground"
-                                                        onClick={handleMigrateLedger}
+                                                        onClick={handleRefreshLedger}
                                                     >
-                                                        <DatabaseZap className="w-3 h-3 mr-1.5" /> Initialize Ledger
+                                                        <DatabaseZap className="w-3 h-3 mr-1.5" /> Refresh Ledger
                                                     </Button>
                                                 )}
                                             </div>
@@ -2699,451 +3009,223 @@ function AdminDashboard() {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <>
-                                                <div className="flex items-center gap-4 bg-card/50 p-2 rounded-2xl border border-primary/10 w-fit">
-                                                    <Button 
-                                                        variant={dailyFeeInternalTab === 'summary' ? 'default' : 'ghost'}
-                                                        onClick={() => setDailyFeeInternalTab('summary')}
-                                                        className={cn("h-9 rounded-xl font-bold text-xs px-6 transition-all", dailyFeeInternalTab === 'summary' && "shadow-lg shadow-primary/20")}
-                                                    >
-                                                        Summary View
-                                                    </Button>
-                                                    <Button 
-                                                        variant={dailyFeeInternalTab === 'record' ? 'default' : 'ghost'}
-                                                        onClick={() => setDailyFeeInternalTab('record')}
-                                                        className={cn("h-9 rounded-xl font-bold text-xs px-6 transition-all", dailyFeeInternalTab === 'record' && "shadow-lg shadow-primary/20")}
-                                                    >
-                                                        Bulk Daily Payments
-                                                    </Button>
-                                                </div>
-                                            </>
-                                        )}
-
-                                        {dailyFeeInternalTab === 'summary' ? (
-                                    <Card className="border border-primary/10 shadow-lg rounded-2xl overflow-hidden">
-                                        <CardHeader className="bg-primary/5 border-b border-primary/10">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <CardTitle className="text-heading-lg flex items-center gap-2">
-                                                        <UtensilsCrossed className="w-6 h-6 text-primary" />
-                                                        Daily Fee Usage Summary
-                                                    </CardTitle>
-                                                    <CardDescription className="font-medium">Total accumulated fees based on student attendance for the current term.</CardDescription>
-                                                </div>
-                                                 <div className="flex items-center gap-3">
-                                                    <TooltipProvider>
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Button 
-                                                                    variant="outline" 
-                                                                    size="sm" 
-                                                                    className="h-8 gap-1.5 border-amber-200 bg-amber-50/50 hover:bg-amber-100 text-amber-700 font-bold"
-                                                                    onClick={handleSyncAllDailyFees}
-                                                                    disabled={isLoading}
-                                                                >
-                                                                    <RefreshCcw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
-                                                                    Clean & Fix Ledger
-                                                                </Button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent side="bottom" className="max-w-xs">
-                                                                <p className="font-bold">Sync & Fix Errors</p>
-                                                                <p className="text-xs">Removes erroneous duplicate entries (including the GH¢1105 error) and reconciles attendance records with the ledger.</p>
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    </TooltipProvider>
-                                                    <Badge variant="outline" className="bg-white font-black text-xs px-3 py-1 border-2 text-primary border-primary/20">
-                                                        {dailyFeeSummary.length} Records
-                                                    </Badge>
-                                                </div>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent className="p-0">
-                                            <Table>
-                                                <TableHeader className="bg-muted/30">
-                                                    <TableRow>
-                                                        <TableHead className="font-bold text-primary uppercase text-[10px] tracking-widest pl-6">Student Name</TableHead>
-                                                        <TableHead className="font-bold text-primary uppercase text-[10px] tracking-widest">Class</TableHead>
-                                                        <TableHead className="font-bold text-primary uppercase text-[10px] tracking-widest">Fee Category</TableHead>
-                                                         <TableHead className="font-bold text-primary uppercase text-[10px] tracking-widest">Status</TableHead>
-                                                        <TableHead className="text-center font-bold text-primary uppercase text-[10px] tracking-widest">Days Present</TableHead>
-                                                        <TableHead className="text-right font-bold text-primary uppercase text-[10px] tracking-widest">Daily Rate</TableHead>
-                                                        <TableHead className="text-right font-bold text-primary uppercase text-[10px] tracking-widest">Accrued</TableHead>
-                                                        <TableHead className="text-right font-bold text-primary uppercase text-[10px] tracking-widest">Paid</TableHead>
-                                                        <TableHead className="text-right font-bold text-primary uppercase text-[10px] tracking-widest">Balance</TableHead>
-                                                        <TableHead className="text-right font-bold text-primary uppercase text-[10px] tracking-widest pr-6">Actions</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {dailyFeeSummary.length > 0 ? (
-                                                        dailyFeeSummary.map((row, idx) => (
-                                                            <TableRow key={`${row.studentName}-${row.categoryName}-${idx}`} className="hover:bg-primary/5 transition-colors border-primary/5">
-                                                                <TableCell className="font-bold text-sm pl-6">{row.studentName}</TableCell>
-                                                                <TableCell><Badge variant="secondary" className="text-[10px]">{row.className}</Badge></TableCell>
-                                                                <TableCell>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className="w-2 h-2 rounded-full bg-primary" />
-                                                                        <span className="text-sm font-medium">{row.categoryName}</span>
-                                                                    </div>
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    <Badge 
-                                                                        variant={row.status === 'Paid' ? 'secondary' : row.status === 'Partially Paid' ? 'secondary' : 'outline'}
-                                                                        className={cn(
-                                                                            "text-[10px] px-2 py-0 h-5 font-bold uppercase tracking-tighter",
-                                                                            row.status === 'Paid' ? "bg-emerald-50 text-emerald-700 border-emerald-200" : 
-                                                                            row.status === 'Partially Paid' ? "bg-amber-50 text-amber-700 border-amber-200" : 
-                                                                            "bg-red-50 text-red-700 border-red-200"
-                                                                        )}
+                                        <Card className="border border-primary/10 shadow-lg rounded-2xl overflow-hidden">
+                                            <CardHeader className="bg-primary/5 border-b border-primary/10 py-4">
+                                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                                    <div>
+                                                        <CardTitle className="text-heading-lg flex items-center gap-2">
+                                                            <UtensilsCrossed className="w-6 h-6 text-primary" />
+                                                            Daily Fee Management
+                                                        </CardTitle>
+                                                        <CardDescription className="font-medium">Track accumulated fees and record payments in bulk for selected records.</CardDescription>
+                                                    </div>
+                                                    
+                                                    <div className="flex flex-wrap items-center gap-3">
+                                                        <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-primary/10 shadow-sm">
+                                                            <Popover>
+                                                                <PopoverTrigger asChild>
+                                                                    <Button 
+                                                                        variant="ghost" 
+                                                                        size="sm"
+                                                                        className="h-8 flex items-center gap-2 px-3 border-r border-primary/5 hover:bg-primary/5 rounded-none group"
                                                                     >
-                                                                        {row.status}
-                                                                    </Badge>
-                                                                </TableCell>
-                                                                <TableCell className="text-center font-bold text-sm text-numeric">{row.daysPresent} Days</TableCell>
-                                                                <TableCell className="text-right font-medium text-sm text-numeric">
-                                                                    <div className="flex items-center justify-end gap-1">
-                                                                        {editingRateId === `${row.studentId}-${row.categoryId}` ? (
-                                                                            <div className="flex items-center justify-end gap-2">
-                                                                                <Input 
-                                                                                    autoFocus
-                                                                                    type="number"
-                                                                                    value={editingRateValue}
-                                                                                    onChange={(e) => setEditingRateValue(e.target.value)}
-                                                                                    className="w-24 h-8 text-right font-bold bg-white border-primary/30"
-                                                                                    onKeyDown={(e) => {
-                                                                                        if (e.key === 'Enter') handleUpdateDailyRate(row.studentId, row.categoryId, Number(editingRateValue));
-                                                                                        if (e.key === 'Escape') setEditingRateId(null);
-                                                                                    }}
-                                                                                />
-                                                                                <Button 
-                                                                                    size="icon" 
-                                                                                    variant="ghost" 
-                                                                                    className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 rounded-lg" 
-                                                                                    onClick={() => handleUpdateDailyRate(row.studentId, row.categoryId, Number(editingRateValue))}
-                                                                                >
-                                                                                    <Check className="w-4 h-4" />
-                                                                                </Button>
-                                                                            </div>
-                                                                        ) : (
-                                                                            <>
-                                                                                <TooltipProvider>
-                                                                                    <Tooltip>
-                                                                                        <TooltipTrigger asChild>
-                                                                                            <Button 
-                                                                                                size="icon" 
-                                                                                                variant="ghost" 
-                                                                                                className="h-7 w-7 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                                                onClick={() => handleUpdateDailyRate(row.studentId, row.categoryId, row.dailyRate)}
-                                                                                            >
-                                                                                                <RefreshCcw className="w-3 h-3" />
-                                                                                            </Button>
-                                                                                        </TooltipTrigger>
-                                                                                        <TooltipContent>Sync Billing with Attendance</TooltipContent>
-                                                                                    </Tooltip>
-                                                                                </TooltipProvider>
-                                                                                <div 
-                                                                                    className="flex items-center justify-end gap-2 cursor-pointer group hover:text-primary transition-all py-1"
-                                                                                    onClick={() => {
-                                                                                        setEditingRateId(`${row.studentId}-${row.categoryId}`);
-                                                                                        setEditingRateValue(row.dailyRate.toString());
-                                                                                    }}
-                                                                                >
-                                                                                    <span className="border-b border-dashed border-transparent group-hover:border-primary/30">GH¢{row.dailyRate.toFixed(2)}</span>
-                                                                                    <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-40 transition-opacity" />
-                                                                                </div>
-                                                                            </>
-                                                                        )}
-                                                                    </div>
-                                                                </TableCell>
-                                                                <TableCell className="text-right font-bold text-sm text-numeric">GH¢{row.totalBilled.toFixed(2)}</TableCell>
-                                                                <TableCell className="text-right font-medium text-sm text-numeric text-emerald-600">GH¢{row.totalPaid.toFixed(2)}</TableCell>
-                                                                <TableCell className={`text-right font-black text-sm text-numeric ${row.balance <= 0 ? 'text-emerald-700' : 'text-destructive'}`}>
-                                                                    GH¢{row.balance.toFixed(2)}
-                                                                </TableCell>
-                                                                <TableCell className="text-right pr-6">
-                                                                    <div className="flex items-center justify-end gap-1">
-                                                                        <Button 
-                                                                            variant="ghost" 
-                                                                            size="sm" 
-                                                                            onClick={() => handleOpenQuickDailyPayment(row.studentId, row.categoryName)}
-                                                                            className="h-8 px-2 text-emerald-600 hover:bg-emerald-50 font-bold text-[10px] uppercase gap-1.5"
-                                                                        >
-                                                                            <PlusCircle className="w-3 h-3" /> Pay
-                                                                        </Button>
-                                                                        <Button 
-                                                                            variant="ghost" 
-                                                                            size="sm" 
-                                                                            onClick={() => setCategoryToClear({studentId: row.studentId, categoryId: row.categoryId, categoryName: row.categoryName, docId: row.docId})}
-                                                                            className="h-8 px-2 text-destructive hover:bg-destructive/10 font-bold text-[10px] uppercase gap-1.5"
-                                                                            title="Clear all records for this category"
-                                                                        >
-                                                                            <Trash2 className="w-3 h-3" /> Clear
-                                                                        </Button>
-                                                                    </div>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        ))
-                                                    ) : (
-                                                        <TableRow>
-                                                            <TableCell colSpan={10} className="h-64 text-center">
-                                                                <div className="flex flex-col items-center justify-center opacity-40">
-                                                                    <Users className="w-12 h-12 mb-4" />
-                                                                    <p className="font-bold">No daily fee records found for this period.</p>
-                                                                    <p className="text-xs">Ensure attendance has been marked and daily rates are set for students.</p>
-                                                                </div>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    )}
-                                                </TableBody>
-                                            </Table>
-                                        </CardContent>
-                                    </Card>
-                                        ) : (
-                                            <div className="space-y-6">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-card border border-primary/10 p-5 rounded-2xl shadow-sm">
-                                        <div className="space-y-2">
-                                            <Label className="text-[10px] font-black uppercase tracking-widest text-primary/70">1. Select Category</Label>
-                                            <Select value={selectedDailyCategoryForPayments} onValueChange={setSelectedDailyCategoryForPayments}>
-                                                <SelectTrigger className="h-11 rounded-xl border-primary/20 bg-primary/5 font-bold">
-                                                    <SelectValue placeholder="Choose daily category..." />
-                                                </SelectTrigger>
-                                                <SelectContent className="rounded-xl border-none shadow-2xl">
-                                                    <SelectItem value="feeding" className="font-bold">Feeding Fee</SelectItem>
-                                                    {feeCategories.filter(c => c.isDaily).map(c => (
-                                                        <SelectItem key={c.id} value={c.id} className="font-bold">{c.name}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
+                                                                        <CalendarIcon className="w-3.5 h-3.5 text-primary/60 group-hover:text-primary transition-colors" />
+                                                                        <span className="font-bold text-[11px] text-primary whitespace-nowrap">
+                                                                            {selectedPaymentDate ? new Date(selectedPaymentDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Select Date'}
+                                                                        </span>
+                                                                    </Button>
+                                                                </PopoverTrigger>
+                                                                <PopoverContent className="w-auto p-0 border-none shadow-2xl rounded-2xl overflow-hidden bg-white z-[100]" align="start">
+                                                                    <Calendar
+                                                                        mode="single"
+                                                                        selected={selectedPaymentDate ? new Date(selectedPaymentDate + 'T00:00:00') : undefined}
+                                                                        onSelect={(date) => date && setSelectedPaymentDate(date.toISOString().split('T')[0])}
+                                                                        initialFocus
+                                                                        className="rounded-2xl"
+                                                                    />
+                                                                </PopoverContent>
+                                                            </Popover>
+                                                            <Button 
+                                                                size="sm"
+                                                                disabled={isSubmitting || Object.values(bulkDailyPaymentsSelection).filter(Boolean).length === 0}
+                                                                onClick={handleRecordDailyPayments}
+                                                                className="h-8 rounded-lg bg-primary hover:bg-primary/90 text-white font-bold text-[10px] px-4 shadow-md shadow-primary/10 transition-all gap-2"
+                                                            >
+                                                                {isSubmitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                                                Record {Object.values(bulkDailyPaymentsSelection).filter(Boolean).length} Payments
+                                                            </Button>
+                                                        </div>
 
-                                        <div className="space-y-2">
-                                            <Label className="text-[10px] font-black uppercase tracking-widest text-primary/70">2. Select Date</Label>
-                                            <Input 
-                                                type="date" 
-                                                className="h-11 rounded-xl border-primary/20 bg-primary/5 font-bold"
-                                                value={selectedPaymentDate}
-                                                onChange={(e) => setSelectedPaymentDate(e.target.value)}
-                                            />
-                                        </div>
-
-                                        <div className="flex items-end">
-                                            <Button 
-                                                disabled={isSubmitting || !selectedDailyCategoryForPayments || Object.values(bulkDailyPaymentsSelection).filter(Boolean).length === 0}
-                                                onClick={handleRecordDailyPayments}
-                                                className="w-full h-11 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold shadow-lg shadow-primary/20 transition-all gap-2"
-                                            >
-                                                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                                Record {Object.values(bulkDailyPaymentsSelection).filter(Boolean).length} Payments
-                                            </Button>
-                                        </div>
-                                    </div>
-
-                                    <Card className="border border-primary/10 shadow-lg rounded-2xl overflow-hidden">
-                                        <CardHeader className="bg-primary/5 border-b border-primary/10">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <CardTitle className="text-heading-lg flex items-center gap-2">
-                                                        <Banknote className="w-6 h-6 text-primary" />
-                                                        Daily Payment Entry
-                                                    </CardTitle>
-                                                    <CardDescription className="font-medium">Check the students who paid for the selected date.</CardDescription>
+                                                        <TooltipProvider>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <Button 
+                                                                        variant="outline" 
+                                                                        size="sm" 
+                                                                        className="h-9 w-9 p-0 border-primary/10 bg-white hover:bg-primary/5 text-primary"
+                                                                        onClick={handleSyncAllDailyFees}
+                                                                        disabled={isLoading}
+                                                                    >
+                                                                        <RefreshCcw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+                                                                    </Button>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent side="bottom">
+                                                                    <p className="font-bold">Sync & Fix Errors</p>
+                                                                    <p className="text-xs">Reconciles attendance records with the ledger.</p>
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
+                                                        
+                                                        <Badge variant="outline" className="bg-white font-black text-xs px-3 py-1.5 border-2 text-primary border-primary/20">
+                                                            {dailyFeeSummary.length} Records
+                                                        </Badge>
+                                                    </div>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="sm" 
-                                                        className="rounded-lg font-bold text-[10px] h-8 border-primary/20"
-                                                        onClick={() => {
-                                                            const newSelection: Record<string, boolean> = {};
-                                                            filteredStudentsForFees.forEach(s => {
-                                                                const category = feeCategories.filter(c => c.isDaily).find(c => c.id === selectedDailyCategoryForPayments) || { name: 'Feeding Fee', id: 'feeding' };
-                                                                const hasPaid = s.ledger?.some(tx => 
-                                                                    tx.date === selectedPaymentDate && 
-                                                                    tx.type === 'payment' && 
-                                                                    !tx.isVoided &&
-                                                                    tx.category === category.name
-                                                                ) || false;
-                                                                if (!hasPaid) newSelection[s.studentId] = true;
-                                                            });
-                                                            setBulkDailyPaymentsSelection(newSelection);
-                                                        }}
-                                                    >
-                                                        Select All Unpaid
-                                                    </Button>
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="sm" 
-                                                        className="rounded-lg font-bold text-[10px] h-8 border-emerald-500/20 text-emerald-600 hover:bg-emerald-50"
-                                                        onClick={() => {
-                                                            const newSelection: Record<string, boolean> = {};
-                                                            filteredStudentsForFees.forEach(s => {
-                                                                const category = feeCategories.filter(c => c.isDaily).find(c => c.id === selectedDailyCategoryForPayments) || { name: 'Feeding Fee', id: 'feeding' };
-                                                                const hasPaid = s.ledger?.some(tx => 
-                                                                    tx.date === selectedPaymentDate && 
-                                                                    tx.type === 'payment' && 
-                                                                    !tx.isVoided &&
-                                                                    tx.category === category.name
-                                                                ) || false;
-                                                                const attendance = s.attendance?.find(a => a.date === selectedPaymentDate);
-                                                                const isPresent = attendance?.attended || false;
-                                                                if (isPresent && !hasPaid) newSelection[s.studentId] = true;
-                                                            });
-                                                            setBulkDailyPaymentsSelection(newSelection);
-                                                        }}
-                                                    >
-                                                        Select Present & Unpaid
-                                                    </Button>
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="sm" 
-                                                        className="rounded-lg font-bold text-[10px] h-8"
-                                                        onClick={() => setBulkDailyPaymentsSelection({})}
-                                                    >
-                                                        Clear
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent className="p-0">
-                                            <div className="overflow-x-auto">
-                                                <Table>
-                                                    <TableHeader className="bg-muted/30">
-                                                        <TableRow>
-                                                            <TableHead className="w-[50px] pl-6"></TableHead>
-                                                            <TableHead className="font-bold text-primary uppercase text-[10px] tracking-widest">Student Name</TableHead>
-                                                            <TableHead className="font-bold text-primary uppercase text-[10px] tracking-widest">Class</TableHead>
-                                                            <TableHead className="text-right font-bold text-primary uppercase text-[10px] tracking-widest">Assigned Rate</TableHead>
-                                                            <TableHead className="text-right font-bold text-primary uppercase text-[10px] tracking-widest pr-6">Status</TableHead>
-                                                        </TableRow>
-                                                    </TableHeader>
-                                                    <TableBody>
-                                                        {filteredStudentsForFees.length > 0 ? (
-                                                            filteredStudentsForFees.map(student => {
-                                                                let rate = 0;
-                                                                const category = feeCategories.filter(c => c.isDaily).find(c => c.id === selectedDailyCategoryForPayments) || { name: 'Feeding Fee', id: 'feeding' };
-                                                                
-                                                                if (selectedDailyCategoryForPayments === 'feeding') {
-                                                                    rate = Number(student.dailyFeedingCost) || 0;
-                                                                } else {
-                                                                    const df = student.dailyFees?.find(f => f.categoryId === selectedDailyCategoryForPayments);
-                                                                    rate = Number(df?.rate) || 0;
-                                                                }
-
-                                                                const isSelected = bulkDailyPaymentsSelection[student.studentId] || false;
-                                                                
-                                                                // Check attendance for selected date
-                                                                const attendance = student.attendance?.find(a => a.date === selectedPaymentDate);
-                                                                const isPresent = attendance?.attended || false;
-                                                                
-                                                                // Check if already paid for this category on this date
-                                                                const hasPaid = student.ledger?.some(tx => 
-                                                                    tx.date === selectedPaymentDate && 
-                                                                    tx.type === 'payment' && 
-                                                                    !tx.isVoided &&
-                                                                    (tx.categoryId === category.id || tx.category === category.name)
-                                                                ) || false;
-
-                                                                return (
-                                                                    <TableRow key={student.studentId} className={cn(
-                                                                        "hover:bg-primary/5 transition-colors border-primary/5",
-                                                                        isSelected && "bg-primary/5",
-                                                                        isPresent && !hasPaid && "bg-red-50/30"
-                                                                    )}>
-                                                                        <TableCell className="pl-6">
-                                                                            <Checkbox 
-                                                                                checked={isSelected}
-                                                                                disabled={hasPaid}
-                                                                                onCheckedChange={(checked) => {
-                                                                                    setBulkDailyPaymentsSelection(prev => ({
-                                                                                        ...prev,
-                                                                                        [student.studentId]: !!checked
-                                                                                    }));
-                                                                                }}
-                                                                            />
-                                                                        </TableCell>
-                                                                        <TableCell className="font-bold text-sm">
-                                                                            <div className="flex items-center gap-3">
-                                                                                <GradientAvatar name={student.name} size="sm" />
-                                                                                <div className="flex flex-col">
-                                                                                    <span>{student.name}</span>
-                                                                                    {isPresent ? (
-                                                                                        <span className="text-[9px] text-emerald-600 font-bold uppercase tracking-tighter">Present</span>
-                                                                                    ) : (
-                                                                                        <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-tighter">Absent / Not Marked</span>
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
-                                                                        </TableCell>
-                                                                        <TableCell><Badge variant="secondary" className="text-[10px]">{student.className}</Badge></TableCell>
-                                                                        <TableCell className="text-right font-bold text-sm text-numeric">
-                                                                            {editingRateId === `${student.studentId}-${selectedDailyCategoryForPayments}` ? (
-                                                                                <div className="flex items-center justify-end gap-2">
-                                                                                    <Input 
-                                                                                        autoFocus
-                                                                                        type="number"
-                                                                                        value={editingRateValue}
-                                                                                        onChange={(e) => setEditingRateValue(e.target.value)}
-                                                                                        className="w-20 h-8 text-right font-bold bg-white border-primary/30"
-                                                                                        onKeyDown={(e) => {
-                                                                                            if (e.key === 'Enter') handleUpdateDailyRate(student.studentId, selectedDailyCategoryForPayments, Number(editingRateValue));
-                                                                                            if (e.key === 'Escape') setEditingRateId(null);
-                                                                                        }}
-                                                                                    />
-                                                                                    <Button 
-                                                                                        size="icon" 
-                                                                                        variant="ghost" 
-                                                                                        className="h-8 w-8 text-emerald-600" 
-                                                                                        onClick={() => handleUpdateDailyRate(student.studentId, selectedDailyCategoryForPayments, Number(editingRateValue))}
-                                                                                    >
-                                                                                        <Check className="w-4 h-4" />
-                                                                                    </Button>
-                                                                                </div>
-                                                                            ) : (
-                                                                                <div 
-                                                                                    className="flex items-center justify-end gap-2 cursor-pointer group hover:text-primary transition-all py-1"
-                                                                                    onClick={() => {
-                                                                                        setEditingRateId(`${student.studentId}-${selectedDailyCategoryForPayments}`);
-                                                                                        setEditingRateValue(rate.toString());
-                                                                                    }}
-                                                                                >
-                                                                                    <span className="border-b border-dashed border-transparent group-hover:border-primary/30">GH¢{rate.toFixed(2)}</span>
-                                                                                    <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-40 transition-opacity" />
-                                                                                </div>
-                                                                            )}
-                                                                        </TableCell>
-                                                                        <TableCell className="text-right pr-6">
-                                                                            {hasPaid ? (
-                                                                                <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[10px] uppercase border-none shadow-sm">Paid</Badge>
-                                                                            ) : isPresent ? (
-                                                                                <Badge className="bg-red-500 hover:bg-red-600 text-white font-bold text-[10px] uppercase border-none shadow-sm animate-pulse">Unpaid</Badge>
-                                                                            ) : (
-                                                                                <Badge variant="outline" className="text-muted-foreground font-bold text-[10px] uppercase opacity-50">No Record</Badge>
-                                                                            )}
-                                                                        </TableCell>
-                                                                    </TableRow>
-                                                                );
-                                                            })
-                                                        ) : (
+                                            </CardHeader>
+                                            <CardContent className="p-0">
+                                                <div className="overflow-x-auto">
+                                                    <Table>
+                                                        <TableHeader className="bg-muted/30">
                                                             <TableRow>
-                                                                <TableCell colSpan={5} className="h-64 text-center">
-                                                                    <div className="flex flex-col items-center justify-center opacity-40">
-                                                                        <Users className="w-12 h-12 mb-4" />
-                                                                        <p className="font-bold">No students found.</p>
-                                                                        <p className="text-xs">Select a class to record daily fees.</p>
-                                                                    </div>
-                                                                </TableCell>
+                                                                <TableHead className="w-[50px] pl-6">
+                                                                    <Checkbox 
+                                                                        checked={dailyFeeSummary.length > 0 && dailyFeeSummary.every(row => bulkDailyPaymentsSelection[`${row.studentId}|${row.categoryId}`])}
+                                                                        onCheckedChange={(checked) => {
+                                                                            const newSelection = { ...bulkDailyPaymentsSelection };
+                                                                            dailyFeeSummary.forEach(row => {
+                                                                                newSelection[`${row.studentId}|${row.categoryId}`] = !!checked;
+                                                                            });
+                                                                            setBulkDailyPaymentsSelection(newSelection);
+                                                                        }}
+                                                                        className="border-primary/30 data-[state=checked]:bg-primary"
+                                                                    />
+                                                                </TableHead>
+                                                                <TableHead className="font-bold text-primary uppercase text-[10px] tracking-widest">Student Name</TableHead>
+                                                                <TableHead className="font-bold text-primary uppercase text-[10px] tracking-widest">Status</TableHead>
+                                                                <TableHead className="text-right font-bold text-primary uppercase text-[10px] tracking-widest">Balance</TableHead>
+                                                                <TableHead className="text-right font-bold text-primary uppercase text-[10px] tracking-widest pr-6">Actions</TableHead>
                                                             </TableRow>
-                                                        )}
-                                                    </TableBody>
-                                                </Table>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            )}
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {dailyFeeSummary.length > 0 ? (
+                                                                dailyFeeSummary.map((row, idx) => {
+                                                                    const selectionKey = `${row.studentId}|${row.categoryId}`;
+                                                                    const isSelected = !!bulkDailyPaymentsSelection[selectionKey];
+                                                                    
+                                                                    return (
+                                                                        <TableRow key={`${row.studentName}-${row.categoryName}-${idx}`} className={cn("hover:bg-primary/5 transition-all duration-200 border-primary/5 h-20", isSelected && "bg-primary/[0.04] shadow-inner")}>
+                                                                            <TableCell className="pl-6">
+                                                                                <Checkbox 
+                                                                                    checked={isSelected}
+                                                                                    onCheckedChange={(checked) => {
+                                                                                        setBulkDailyPaymentsSelection(prev => ({
+                                                                                            ...prev,
+                                                                                            [selectionKey]: !!checked
+                                                                                        }));
+                                                                                    }}
+                                                                                    className="border-primary/30 data-[state=checked]:bg-primary"
+                                                                                />
+                                                                            </TableCell>
+                                                                            <TableCell className="font-bold text-sm whitespace-nowrap">
+                                                                                <div className="flex items-center gap-3">
+                                                                                    <GradientAvatar name={row.studentName} src={row.profilePicture} size="md" />
+                                                                                    <div className="flex flex-col">
+                                                                                        <span>{row.studentName}</span>
+                                                                                        <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">{row.categoryName}</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </TableCell>
+                                                                            <TableCell>
+                                                                                <Badge 
+                                                                                    variant={row.status === 'Paid' ? 'secondary' : row.status === 'Partially Paid' ? 'secondary' : 'outline'}
+                                                                                    className={cn(
+                                                                                        "text-[10px] px-2 py-0 h-5 font-bold uppercase tracking-tighter",
+                                                                                        row.status === 'Paid' ? "bg-emerald-50 text-emerald-700 border-emerald-200" : 
+                                                                                        row.status === 'Partially Paid' ? "bg-amber-50 text-amber-700 border-amber-200" : 
+                                                                                        "bg-red-50 text-red-700 border-red-200"
+                                                                                    )}
+                                                                                >
+                                                                                    {row.status}
+                                                                                </Badge>
+                                                                            </TableCell>
+                                                                            <TableCell className={`text-right font-black text-sm text-numeric ${row.balance <= 0 ? 'text-emerald-700' : 'text-destructive'}`}>
+                                                                                GH¢{row.balance.toFixed(2)}
+                                                                            </TableCell>
+                                                                            <TableCell className="text-right pr-6">
+                                                                                <div className="flex items-center justify-end">
+                                                                                    <DropdownMenu>
+                                                                                        <DropdownMenuTrigger asChild>
+                                                                                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-primary/10">
+                                                                                                <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                                                                                            </Button>
+                                                                                        </DropdownMenuTrigger>
+                                                                                        <DropdownMenuContent align="end" className="w-56 rounded-xl border-none shadow-2xl p-2">
+                                                                                            <div className="px-3 py-2.5 mb-1 bg-muted/40 rounded-lg">
+                                                                                                <p className="text-[11px] font-black uppercase text-muted-foreground tracking-widest mb-1.5 border-b border-primary/5 pb-1">Fee Details</p>
+                                                                                                <div className="grid grid-cols-2 gap-y-1.5">
+                                                                                                    <span className="text-xs text-muted-foreground font-medium">Daily Rate:</span>
+                                                                                                    <span className="text-xs font-bold text-right">GH¢{row.dailyRate.toFixed(2)}</span>
+                                                                                                    <span className="text-xs text-muted-foreground font-medium">Days Present:</span>
+                                                                                                    <span className="text-xs font-bold text-right">{row.daysPresent} days</span>
+                                                                                                    <span className="text-xs text-muted-foreground font-medium">Total Accrued:</span>
+                                                                                                    <span className="text-xs font-bold text-right">GH¢{row.totalBilled.toFixed(2)}</span>
+                                                                                                    <span className="text-xs text-muted-foreground font-medium">Total Paid:</span>
+                                                                                                    <span className="text-xs font-bold text-right text-emerald-600">GH¢{row.totalPaid.toFixed(2)}</span>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <DropdownMenuSeparator className="bg-primary/5 mx-0" />
+                                                                                            <DropdownMenuItem 
+                                                                                                onSelect={(e) => {
+                                                                                                    e.preventDefault();
+                                                                                                    setEditingRateId(selectionKey);
+                                                                                                    setEditingRateValue(row.dailyRate.toString());
+                                                                                                }}
+                                                                                                className="font-bold text-xs uppercase text-primary focus:text-primary focus:bg-primary/5 cursor-pointer py-3 rounded-lg"
+                                                                                            >
+                                                                                                <Pencil className="w-4 h-4 mr-2" /> Change Rate
+                                                                                            </DropdownMenuItem>
+                                                                                            <DropdownMenuItem 
+                                                                                                onClick={() => handleOpenQuickDailyPayment(row.studentId, row.categoryName)}
+                                                                                                className="font-bold text-xs uppercase text-emerald-600 focus:text-emerald-700 focus:bg-emerald-50 cursor-pointer py-2.5"
+                                                                                            >
+                                                                                                <PlusCircle className="w-4 h-4 mr-2" /> Pay Now
+                                                                                            </DropdownMenuItem>
+                                                                                            <DropdownMenuSeparator className="bg-primary/5" />
+                                                                                            <DropdownMenuItem 
+                                                                                                onClick={() => setCategoryToClear({studentId: row.studentId, categoryId: row.categoryId, categoryName: row.categoryName, docId: row.docId})}
+                                                                                                className="font-bold text-xs uppercase text-destructive focus:text-destructive focus:bg-red-50 cursor-pointer py-2.5"
+                                                                                            >
+                                                                                                <Trash2 className="w-4 h-4 mr-2" /> Clear Records
+                                                                                            </DropdownMenuItem>
+                                                                                        </DropdownMenuContent>
+                                                                                    </DropdownMenu>
+                                                                                </div>
+                                                                            </TableCell>
+                                                                        </TableRow>
+                                                                    );
+                                                                })
+                                                            ) : (
+                                                                <TableRow>
+                                                                    <TableCell colSpan={5} className="h-64 text-center">
+                                                                        <div className="flex flex-col items-center justify-center opacity-40">
+                                                                            <Users className="w-12 h-12 mb-4" />
+                                                                            <p className="font-bold">No daily fee records found for this period.</p>
+                                                                            <p className="text-xs">Ensure attendance has been marked and daily rates are set for students.</p>
+                                                                        </div>
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            )}
+                                                        </TableBody>
+                                                    </Table>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         
                         {activeTab === 'attendance' && (
                             <Card>
@@ -3970,53 +4052,68 @@ function AdminDashboard() {
                                     </CardContent>
                                 </Card>
 
-                                <Card className="mb-8 border-green-200 bg-green-50/30">
+                                <Card className="mb-8 border-blue-200 bg-blue-50/30">
                                     <CardHeader>
-                                        <CardTitle className="text-heading-md flex items-center gap-2 text-green-800"><Send className="w-6 h-6"/> SMS Gateway Settings (Sendexa)</CardTitle>
-                                        <CardDescription>Enter your Sendexa API credentials to send manual and automated SMS announcements.</CardDescription>
+                                        <CardTitle className="text-heading-md flex items-center gap-2 text-blue-800"><MessageSquare className="w-6 h-6"/> Hubtel SMS Gateway Settings</CardTitle>
+                                        <CardDescription>Configure credentials for school fee reminders and general announcements. Find these in Hubtel Dashboard under <strong>Programmable SMS</strong>.</CardDescription>
                                     </CardHeader>
-                                    <CardContent className="space-y-4">
+                                    <CardContent className="space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="hubtelSenderId">SMS Sender ID</Label>
+                                                <Input 
+                                                    id="hubtelSenderId" 
+                                                    placeholder="Sender Name (max 11 chars)" 
+                                                    maxLength={11}
+                                                    value={schoolSettingsForm.hubtelSenderId || ''} 
+                                                    onChange={e => setSchoolSettingsForm({ ...schoolSettingsForm, hubtelSenderId: e.target.value })} 
+                                                    disabled={isSubmitting} 
+                                                />
+                                                <p className="text-[10px] text-muted-foreground">Alphanumeric only. This is the name parents see on their phones.</p>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="hubtelSmsClientId">SMS Client ID</Label>
+                                                <Input 
+                                                    id="hubtelSmsClientId" 
+                                                    placeholder="From Programmable SMS API Key" 
+                                                    value={schoolSettingsForm.hubtelSmsClientId || ''} 
+                                                    onChange={e => setSchoolSettingsForm({ ...schoolSettingsForm, hubtelSmsClientId: e.target.value })} 
+                                                    disabled={isSubmitting} 
+                                                />
+                                            </div>
+                                        </div>
+
                                         <div className="space-y-2">
-                                            <Label htmlFor="sendexaApiToken">API TOKEN (BASE64)</Label>
+                                            <Label htmlFor="hubtelSmsClientSecret">SMS Client Secret</Label>
                                             <div className="relative">
                                                 <Input 
-                                                    id="sendexaApiToken" 
-                                                    type={showSendexaSecret ? "text" : "password"}
-                                                    placeholder="Your Sendexa API Token" 
-                                                    value={schoolSettingsForm.sendexaApiToken || ''} 
-                                                    onChange={e => setSchoolSettingsForm({ ...schoolSettingsForm, sendexaApiToken: e.target.value })} 
+                                                    id="hubtelSmsClientSecret" 
+                                                    type={showSecretKey ? "text" : "password"}
+                                                    placeholder="From Programmable SMS API Key" 
+                                                    value={schoolSettingsForm.hubtelSmsClientSecret || ''} 
+                                                    onChange={e => setSchoolSettingsForm({ ...schoolSettingsForm, hubtelSmsClientSecret: e.target.value })} 
                                                     disabled={isSubmitting} 
                                                     className="pr-10"
                                                 />
                                                 <button
                                                     type="button"
-                                                    onClick={() => setShowSendexaSecret(!showSendexaSecret)}
+                                                    onClick={() => setShowSecretKey(!showSecretKey)}
                                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                                                 >
-                                                    {showSendexaSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                    {showSecretKey ? <EyeOff size={16} /> : <Eye size={16} />}
                                                 </button>
                                             </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="sendexaSenderId">Sendexa Sender ID</Label>
-                                            <Input 
-                                                id="sendexaSenderId" 
-                                                placeholder="Your Sender ID (e.g. ZipSMA)" 
-                                                value={schoolSettingsForm.sendexaSenderId || ''} 
-                                                onChange={e => setSchoolSettingsForm({ ...schoolSettingsForm, sendexaSenderId: e.target.value })} 
-                                                disabled={isSubmitting} 
-                                            />
                                         </div>
                                     </CardContent>
                                 </Card>
 
-                                <Card className="mb-8 border-blue-200 bg-blue-50/30">
+                                <Card className="mb-8 border-indigo-200 bg-indigo-50/30">
                                     <CardHeader>
-                                        <CardTitle className="text-heading-md flex items-center gap-2 text-blue-800"><Wallet className="w-6 h-6"/> Payment Gateway Settings (Hubtel)</CardTitle>
-                                        <CardDescription>Configure your Hubtel Merchant credentials to enable online fee payments for parents.</CardDescription>
+                                        <CardTitle className="text-heading-md flex items-center gap-2 text-indigo-800"><Wallet className="w-6 h-6"/> Hubtel Payment Gateway Settings</CardTitle>
+                                        <CardDescription>Configure credentials for receiving online payments. Find these in Hubtel Dashboard under <strong>Merchant Account</strong>.</CardDescription>
                                     </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <CardContent className="space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <div className="space-y-2">
                                                 <Label htmlFor="hubtelMerchantNumber">Merchant Account Number</Label>
                                                 <Input 
@@ -4028,34 +4125,35 @@ function AdminDashboard() {
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <Label htmlFor="hubtelClientId">Client ID</Label>
+                                                <Label htmlFor="hubtelPaymentClientId">Payment Client ID</Label>
                                                 <Input 
-                                                    id="hubtelClientId" 
-                                                    placeholder="Your Client ID" 
-                                                    value={schoolSettingsForm.hubtelClientId || ''} 
-                                                    onChange={e => setSchoolSettingsForm({ ...schoolSettingsForm, hubtelClientId: e.target.value })} 
+                                                    id="hubtelPaymentClientId" 
+                                                    placeholder="Merchant API Client ID" 
+                                                    value={schoolSettingsForm.hubtelPaymentClientId || ''} 
+                                                    onChange={e => setSchoolSettingsForm({ ...schoolSettingsForm, hubtelPaymentClientId: e.target.value })} 
                                                     disabled={isSubmitting} 
                                                 />
                                             </div>
                                         </div>
+
                                         <div className="space-y-2">
-                                            <Label htmlFor="hubtelClientSecret">Client Secret</Label>
+                                            <Label htmlFor="hubtelPaymentClientSecret">Payment Client Secret</Label>
                                             <div className="relative">
                                                 <Input 
-                                                    id="hubtelClientSecret" 
-                                                    type={showSecretKey ? "text" : "password"}
-                                                    placeholder="Your Client Secret" 
-                                                    value={schoolSettingsForm.hubtelClientSecret || ''} 
-                                                    onChange={e => setSchoolSettingsForm({ ...schoolSettingsForm, hubtelClientSecret: e.target.value })} 
+                                                    id="hubtelPaymentClientSecret" 
+                                                    type={showPaymentSecret ? "text" : "password"}
+                                                    placeholder="Merchant API Client Secret" 
+                                                    value={schoolSettingsForm.hubtelPaymentClientSecret || ''} 
+                                                    onChange={e => setSchoolSettingsForm({ ...schoolSettingsForm, hubtelPaymentClientSecret: e.target.value })} 
                                                     disabled={isSubmitting} 
                                                     className="pr-10"
                                                 />
                                                 <button
                                                     type="button"
-                                                    onClick={() => setShowSecretKey(!showSecretKey)}
+                                                    onClick={() => setShowPaymentSecret(!showPaymentSecret)}
                                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                                                 >
-                                                    {showSecretKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                    {showPaymentSecret ? <EyeOff size={16} /> : <Eye size={16} />}
                                                 </button>
                                             </div>
                                         </div>
@@ -4320,6 +4418,34 @@ function AdminDashboard() {
                             </div>
                             <Button type="submit" className="w-full">Verify & Access</Button>
                         </form>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog open={!!editingRateId} onOpenChange={(open) => { if (!open) { setEditingRateId(null); setEditingRateValue(''); } }}>
+                    <DialogContent className="max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Change Daily Rate</DialogTitle>
+                            <DialogDescription>Update the daily rate for this specific record.</DialogDescription>
+                        </DialogHeader>
+                        <div className="py-4">
+                            <Label htmlFor="daily-rate-input" className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">New Rate (GH¢)</Label>
+                            <Input 
+                                id="daily-rate-input"
+                                type="number" 
+                                step="0.01" 
+                                value={editingRateValue} 
+                                onChange={(e) => setEditingRateValue(e.target.value)} 
+                                placeholder="e.g. 15.00"
+                                disabled={isSubmitting}
+                            />
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => { setEditingRateId(null); setEditingRateValue(''); }} disabled={isSubmitting}>Cancel</Button>
+                            <Button onClick={handleSaveDailyRate} disabled={isSubmitting}>
+                                {isSubmitting ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                                Save Rate
+                            </Button>
+                        </DialogFooter>
                     </DialogContent>
                 </Dialog>
 
@@ -4850,134 +4976,294 @@ function AdminDashboard() {
                         </form>
                     </DialogContent>
                 </Dialog>
-
-                {/* --- ACADEMIC SETUP DIALOG --- */}
-
                 <Dialog open={isAcademicSetupOpen} onOpenChange={setIsAcademicSetupOpen}>
-                    <DialogContent className="max-w-2xl overflow-hidden">
-                        <DialogHeader>
-                            <DialogTitle className="flex items-center gap-2 font-sans text-xl font-bold"><CalendarDays className="w-6 h-6 text-primary"/> Academic Periods Setup</DialogTitle>
-                            <DialogDescription className="text-sm">Define your school's academic years and terms. Switching terms will filter all financial records accordingly.</DialogDescription>
-                        </DialogHeader>
+                    <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0 overflow-hidden rounded-3xl border-none shadow-2xl">
+                        <div className="p-8 pb-4 border-b bg-card">
+                            <DialogHeader>
+                                <DialogTitle className="flex items-center gap-3 font-sans text-2xl font-black text-primary">
+                                    <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                                        <CalendarDays className="w-6 h-6"/>
+                                    </div>
+                                    Academic Setup & Installments
+                                </DialogTitle>
+                                <DialogDescription className="text-sm font-medium text-muted-foreground pl-11">
+                                    Configure academic terms and define detailed payment structures.
+                                </DialogDescription>
+                            </DialogHeader>
+                        </div>
                         
-                        <div className="grid md:grid-cols-2 gap-8 py-6">
-                            <section className="space-y-4">
-                                <div className="flex items-center gap-2 px-1">
-                                    {editingPeriodId ? <Edit className="w-4 h-4 text-primary" /> : <PlusCircle className="w-4 h-4 text-primary" />}
-                                    <h3 className="text-xs uppercase tracking-widest font-bold text-muted-foreground">{editingPeriodId ? 'Edit Term' : 'New Term'}</h3>
-                                </div>
-                                <Card className="border-primary/20 bg-primary/5 shadow-none">
-                                    <CardContent className="pt-6">
-                                        <form onSubmit={handleAddAcademicPeriod} className="space-y-4">
-                                            <div className="space-y-2">
-                                                <Label className="text-xs font-semibold">Academic Year</Label>
-                                                <Input placeholder="e.g. 2025/2026" value={newPeriodForm.year} onChange={e => setNewPeriodForm({...newPeriodForm, year: e.target.value})} required disabled={isSubmitting} className="h-10 bg-background/50 border-primary/10 transition-all focus:border-primary"/>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label className="text-xs font-semibold">Term Name</Label>
-                                                <Select value={newPeriodForm.term} onValueChange={(val: any) => setNewPeriodForm({...newPeriodForm, term: val})}>
-                                                    <SelectTrigger className="h-10 bg-background/50 border-primary/10"><SelectValue/></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="First Term">First Term</SelectItem>
-                                                        <SelectItem value="Second Term">Second Term</SelectItem>
-                                                        <SelectItem value="Third Term">Third Term</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-2">
-                                                    <Label className="text-xs font-semibold">Start Date</Label>
-                                                    <Input type="date" value={newPeriodForm.startDate} onChange={e => setNewPeriodForm({...newPeriodForm, startDate: e.target.value})} required disabled={isSubmitting} className="h-10 bg-background/50 border-primary/10 transition-all focus:border-primary"/>
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label className="text-xs font-semibold">End Date</Label>
-                                                    <Input type="date" value={newPeriodForm.endDate} onChange={e => setNewPeriodForm({...newPeriodForm, endDate: e.target.value})} required disabled={isSubmitting} className="h-10 bg-background/50 border-primary/10 transition-all focus:border-primary"/>
-                                                </div>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label className="text-xs font-semibold">Vacation Date</Label>
-                                                <Input type="date" value={newPeriodForm.vacationDate} onChange={e => setNewPeriodForm({...newPeriodForm, vacationDate: e.target.value})} disabled={isSubmitting} className="h-10 bg-background/50 border-primary/10 transition-all focus:border-primary"/>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label className="text-xs font-semibold">Next Term Begins</Label>
-                                                <Input type="date" value={newPeriodForm.nextTermBegins} onChange={e => setNewPeriodForm({...newPeriodForm, nextTermBegins: e.target.value})} disabled={isSubmitting} className="h-10 bg-background/50 border-primary/10 transition-all focus:border-primary"/>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <Button type="submit" className="flex-1 h-10 mt-2 shadow-sm font-semibold" disabled={isSubmitting}>
-                                                    {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin mr-2"/> Saving...</> : (editingPeriodId ? "Update Term" : "Add to Schedule")}
-                                                </Button>
-                                                {editingPeriodId && (
-                                                    <Button type="button" variant="outline" className="h-10 mt-2" onClick={() => {
-                                                        setEditingPeriodId(null);
-                                                        setNewPeriodForm({ year: '', term: 'First Term', startDate: '', endDate: '', vacationDate: '', nextTermBegins: '' });
-                                                    }}>Cancel</Button>
-                                                )}
-                                            </div>
-                                        </form>
-                                    </CardContent>
-                                </Card>
-                            </section>
-                            
-                            <section className="space-y-4 flex flex-col">
-                                <div className="flex items-center gap-2 px-1">
-                                    <LayoutGrid className="w-4 h-4 text-primary" />
-                                    <h3 className="text-xs uppercase tracking-widest font-bold text-muted-foreground">Setup History</h3>
-                                </div>
-                                <div className="flex-1 max-h-[280px] overflow-y-auto border border-primary/10 rounded-xl divide-y bg-card/30 backdrop-blur-sm">
-                                    {academicPeriods.length === 0 ? (
-                                        <div className="p-12 text-center">
-                                            <CalendarDays className="w-8 h-8 mx-auto text-muted-foreground/30 mb-2" />
-                                            <p className="text-xs text-muted-foreground italic">No periods defined yet.</p>
+                        <ScrollArea className="flex-1">
+                            <div className="p-8">
+                                <div className="grid lg:grid-cols-[1.2fr,0.8fr] gap-10">
+                                    {/* --- LEFT COLUMN: FORM --- */}
+                                    <section className="space-y-8">
+                                        <div className="flex items-center gap-2 px-1">
+                                            <div className="w-1 h-4 bg-primary rounded-full" />
+                                            <h3 className="text-sm uppercase tracking-widest font-black text-primary/70">{editingPeriodId ? 'Edit Academic Term' : 'Create New Term'}</h3>
                                         </div>
-                                    ) : (
-                                        academicPeriods.map(p => (
-                                            <div key={p.id} className={cn("p-4 flex items-center justify-between transition-all group", p.isCurrent ? "bg-primary/10" : "hover:bg-primary/5")}>
-                                                <div className="flex flex-col gap-0.5">
-                                                    <p className="font-bold text-sm tracking-tight">{p.year}</p>
-                                                    <p className="text-xs text-muted-foreground font-medium">{p.term}</p>
-                                                    {p.isCurrent && (
-                                                        <div className="flex items-center gap-1.5 mt-2">
-                                                            <span className="relative flex h-2 w-2">
-                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
-                                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
-                                                            </span>
-                                                            <span className="text-[10px] font-bold text-success-foreground bg-success/10 px-1.5 py-0.5 rounded uppercase tracking-tighter">Active Now</span>
+
+                                        <form onSubmit={handleAddAcademicPeriod} className="space-y-8">
+                                            <Card className="border-2 border-primary/10 shadow-none bg-primary/5 rounded-3xl overflow-hidden">
+                                                <CardContent className="p-8 space-y-6">
+                                                    <div className="grid md:grid-cols-2 gap-6">
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-black uppercase text-muted-foreground ml-1">Academic Year</Label>
+                                                            <Input placeholder="e.g. 2025/2026" value={newPeriodForm.year} onChange={e => setNewPeriodForm({...newPeriodForm, year: e.target.value})} required disabled={isSubmitting} className="h-12 bg-background border-primary/10 text-lg font-bold rounded-2xl focus:ring-primary/20"/>
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-black uppercase text-muted-foreground ml-1">Term Name</Label>
+                                                            <Select value={newPeriodForm.term} onValueChange={(val: any) => setNewPeriodForm({...newPeriodForm, term: val})}>
+                                                                <SelectTrigger className="h-12 bg-background border-primary/10 text-lg font-bold rounded-2xl"><SelectValue/></SelectTrigger>
+                                                                <SelectContent className="rounded-2xl border-2">
+                                                                    <SelectItem value="First Term" className="font-bold">First Term</SelectItem>
+                                                                    <SelectItem value="Second Term" className="font-bold">Second Term</SelectItem>
+                                                                    <SelectItem value="Third Term" className="font-bold">Third Term</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-6">
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-black uppercase text-muted-foreground ml-1">Start Date</Label>
+                                                            <Input type="date" value={newPeriodForm.startDate} onChange={e => setNewPeriodForm({...newPeriodForm, startDate: e.target.value})} required disabled={isSubmitting} className="h-12 bg-background border-primary/10 font-bold rounded-2xl"/>
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-black uppercase text-muted-foreground ml-1">End Date</Label>
+                                                            <Input type="date" value={newPeriodForm.endDate} onChange={e => setNewPeriodForm({...newPeriodForm, endDate: e.target.value})} required disabled={isSubmitting} className="h-12 bg-background border-primary/10 font-bold rounded-2xl"/>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-6">
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-black uppercase text-muted-foreground ml-1">Vacation Date</Label>
+                                                            <Input type="date" value={newPeriodForm.vacationDate} onChange={e => setNewPeriodForm({...newPeriodForm, vacationDate: e.target.value})} disabled={isSubmitting} className="h-12 bg-background border-primary/10 font-bold rounded-2xl"/>
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-black uppercase text-muted-foreground ml-1">Next Term Begins</Label>
+                                                            <Input type="date" value={newPeriodForm.nextTermBegins} onChange={e => setNewPeriodForm({...newPeriodForm, nextTermBegins: e.target.value})} disabled={isSubmitting} className="h-12 bg-background border-primary/10 font-bold rounded-2xl"/>
+                                                        </div>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+
+                                            <div className="space-y-6">
+                                                <div className="flex items-center justify-between px-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-1 h-4 bg-amber-500 rounded-full" />
+                                                        <h3 className="text-sm uppercase tracking-widest font-black text-amber-600/80">Installment Plan</h3>
+                                                    </div>
+                                                    <Button 
+                                                        type="button" 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        className="h-10 px-6 rounded-2xl border-amber-200 bg-amber-50 text-amber-700 font-bold hover:bg-amber-100 transition-all active:scale-95 shadow-sm"
+                                                        onClick={() => setNewPeriodForm({
+                                                            ...newPeriodForm, 
+                                                            installmentPlan: [...(newPeriodForm.installmentPlan || []), { id: Date.now().toString(), percentage: 0, deadlineType: 'Week', deadlineValue: '' }]
+                                                        })}
+                                                    >
+                                                        <PlusCircle className="w-4 h-4 mr-2"/> Add Stage
+                                                    </Button>
+                                                </div>
+                                                
+                                                <div className="grid grid-cols-1 gap-6">
+                                                    {newPeriodForm.installmentPlan?.map((stage, index) => (
+                                                        <motion.div 
+                                                            initial={{ opacity: 0, x: -20 }}
+                                                            animate={{ opacity: 1, x: 0 }}
+                                                            key={stage.id} 
+                                                            className="relative group bg-card border-2 border-slate-100 rounded-[2rem] p-8 shadow-sm hover:shadow-xl hover:border-primary/20 transition-all duration-500"
+                                                        >
+                                                            <div className="grid md:grid-cols-3 gap-8">
+                                                                <div className="space-y-2">
+                                                                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Payment Stage (%)</Label>
+                                                                    <div className="relative">
+                                                                        <Percent className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary" />
+                                                                        <Input 
+                                                                            type="number" 
+                                                                            min="1" max="100"
+                                                                            className="h-14 pl-12 rounded-2xl font-black text-xl border-slate-100 bg-slate-50 focus:bg-white transition-all"
+                                                                            placeholder="0"
+                                                                            value={stage.percentage || ''} 
+                                                                            onChange={e => {
+                                                                                const newPlan = [...(newPeriodForm.installmentPlan || [])];
+                                                                                newPlan[index].percentage = parseInt(e.target.value) || 0;
+                                                                                setNewPeriodForm({...newPeriodForm, installmentPlan: newPlan});
+                                                                            }} 
+                                                                        />
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="space-y-2">
+                                                                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Deadline Mode</Label>
+                                                                    <Select 
+                                                                        value={stage.deadlineType} 
+                                                                        onValueChange={(val: any) => {
+                                                                            const newPlan = [...(newPeriodForm.installmentPlan || [])];
+                                                                            newPlan[index].deadlineType = val;
+                                                                            newPlan[index].deadlineValue = '';
+                                                                            setNewPeriodForm({...newPeriodForm, installmentPlan: newPlan});
+                                                                        }}
+                                                                    >
+                                                                        <SelectTrigger className="h-14 rounded-2xl font-bold border-slate-100 bg-slate-50 focus:bg-white transition-all">
+                                                                            <SelectValue/>
+                                                                        </SelectTrigger>
+                                                                        <SelectContent className="rounded-2xl border-2">
+                                                                            <SelectItem value="Week" className="font-bold">By Week Number</SelectItem>
+                                                                            <SelectItem value="Date" className="font-bold">By Calendar Date</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </div>
+
+                                                                <div className="space-y-2">
+                                                                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                                                                        {stage.deadlineType === 'Week' ? 'Week Reference' : 'Due Date'}
+                                                                    </Label>
+                                                                    <div className="relative">
+                                                                        <CalendarDays className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary" />
+                                                                        <Input 
+                                                                            type={stage.deadlineType === 'Week' ? "number" : "date"}
+                                                                            className="h-14 pl-12 rounded-2xl font-bold border-slate-100 bg-slate-50 focus:bg-white transition-all" 
+                                                                            placeholder={stage.deadlineType === 'Week' ? "e.g. 4" : ""}
+                                                                            value={stage.deadlineType === 'Week' ? (stage.deadlineValue.replace('Week ', '') || '') : (stage.deadlineValue || '')} 
+                                                                            onChange={e => {
+                                                                                const newPlan = [...(newPeriodForm.installmentPlan || [])];
+                                                                                newPlan[index].deadlineValue = stage.deadlineType === 'Week' ? `Week ${e.target.value}` : e.target.value;
+                                                                                setNewPeriodForm({...newPeriodForm, installmentPlan: newPlan});
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <Button 
+                                                                type="button" 
+                                                                variant="ghost" 
+                                                                size="icon" 
+                                                                className="absolute -top-4 -right-4 h-10 w-10 bg-white border-2 border-red-50 text-red-500 hover:text-white hover:bg-red-500 rounded-full shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-75 group-hover:scale-100 z-10"
+                                                                onClick={() => {
+                                                                    const newPlan = (newPeriodForm.installmentPlan || []).filter((_, i) => i !== index);
+                                                                    setNewPeriodForm({ ...newPeriodForm, installmentPlan: newPlan });
+                                                                }}
+                                                            >
+                                                                <X className="w-5 h-5" />
+                                                            </Button>
+                                                        </motion.div>
+                                                    ))}
+
+                                                    {(!newPeriodForm.installmentPlan || newPeriodForm.installmentPlan.length === 0) && (
+                                                        <div className="py-12 border-4 border-dashed rounded-[3rem] bg-slate-50/50 flex flex-col items-center justify-center text-center">
+                                                            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
+                                                                <Wallet className="w-8 h-8 text-slate-300" />
+                                                            </div>
+                                                            <p className="text-slate-400 font-black uppercase tracking-widest text-xs">No Installments Defined</p>
+                                                            <p className="text-slate-400/60 text-sm mt-1">Click "Add Stage" to build your payment plan.</p>
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    {!p.isCurrent && (
-                                                        <Button variant="outline" size="sm" className="h-8 text-xs font-bold border-primary/20 hover:bg-primary hover:text-primary-foreground transition-all opacity-0 group-hover:opacity-100 shadow-sm" onClick={() => handleSetCurrentPeriod(p.id)} disabled={isSubmitting}>
-                                                            Activate
-                                                        </Button>
-                                                    )}
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-primary opacity-0 group-hover:opacity-100 transition-all hover:bg-primary/10" onClick={() => {
-                                                        setEditingPeriodId(p.id);
-                                                        setNewPeriodForm({
-                                                            year: p.year,
-                                                            term: p.term,
-                                                            startDate: p.startDate || '',
-                                                            endDate: p.endDate || '',
-                                                            vacationDate: p.vacationDate || '',
-                                                            nextTermBegins: p.nextTermBegins || ''
-                                                        });
-                                                    }} disabled={isSubmitting}>
-                                                        <Edit className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-all hover:bg-destructive/10" onClick={() => {
-                                                        if (confirm(`Are you sure you want to delete the ${p.term} for ${p.year}? This might affect records linked to this term.`)) {
-                                                            handleDeleteAcademicPeriod(p.id);
-                                                        }
-                                                    }} disabled={isSubmitting}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
+
+                                                {newPeriodForm.installmentPlan && newPeriodForm.installmentPlan.length > 0 && (
+                                                    <div className="bg-primary/5 rounded-[2.5rem] p-6 border-2 border-primary/10 flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                                                <CheckCheck className="w-6 h-6" />
+                                                            </div>
+                                                            <span className="text-sm font-black uppercase tracking-widest text-primary/60">Total Structure Coverage:</span>
+                                                        </div>
+                                                        <span className={cn(
+                                                            "text-3xl font-black tracking-tighter px-6 py-2 rounded-2xl",
+                                                            newPeriodForm.installmentPlan.reduce((acc, s) => acc + (s.percentage || 0), 0) === 100 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                                                        )}>
+                                                            {newPeriodForm.installmentPlan.reduce((acc, s) => acc + (s.percentage || 0), 0)}%
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
-                                        ))
-                                    )}
+
+                                            <div className="flex gap-4 pt-6">
+                                                <Button type="submit" className="flex-1 h-16 shadow-xl shadow-primary/20 font-black uppercase tracking-widest text-lg rounded-[2rem]" disabled={isSubmitting}>
+                                                    {isSubmitting ? <><Loader2 className="w-6 h-6 animate-spin mr-3"/> Processing...</> : (editingPeriodId ? "Update Academic Period" : "Activate New Term")}
+                                                </Button>
+                                                {editingPeriodId && (
+                                                    <Button type="button" variant="outline" className="h-16 px-8 rounded-[2rem] border-2 font-bold" onClick={() => {
+                                                        setEditingPeriodId(null);
+                                                        setNewPeriodForm({ year: '', term: 'First Term', startDate: '', endDate: '', vacationDate: '', nextTermBegins: '', installmentPlan: [] });
+                                                    }}>Cancel</Button>
+                                                )}
+                                            </div>
+                                            
+                                            {/* Extra spacing for scroll */}
+                                            <div className="h-12" />
+                                        </form>
+                                    </section>
+                                    
+                                    {/* --- RIGHT COLUMN: HISTORY --- */}
+                                    <section className="space-y-6">
+                                        <div className="flex items-center gap-2 px-1">
+                                            <div className="w-1 h-4 bg-slate-400 rounded-full" />
+                                            <h3 className="text-sm uppercase tracking-widest font-black text-slate-500">Academic History</h3>
+                                        </div>
+                                        <div className="border-2 border-slate-100 rounded-[2.5rem] bg-slate-50/30 overflow-hidden divide-y divide-slate-100">
+                                            {academicPeriods.length === 0 ? (
+                                                <div className="p-20 text-center">
+                                                    <CalendarDays className="w-12 h-12 mx-auto text-slate-200 mb-4" />
+                                                    <p className="text-sm text-slate-400 font-medium">No historical records found.</p>
+                                                </div>
+                                            ) : (
+                                                academicPeriods.map(p => (
+                                                    <div key={p.id} className={cn("p-6 flex items-center justify-between transition-all group", p.isCurrent ? "bg-white border-l-4 border-l-primary" : "hover:bg-white")}>
+                                                        <div className="flex flex-col gap-1">
+                                                            <p className="font-black text-lg tracking-tight text-slate-800">{p.year}</p>
+                                                            <p className="text-xs text-muted-foreground font-black uppercase tracking-widest">{p.term}</p>
+                                                            {p.isCurrent && (
+                                                                <div className="flex items-center gap-2 mt-2">
+                                                                    <span className="relative flex h-2 w-2">
+                                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                                                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                                                    </span>
+                                                                    <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg uppercase tracking-widest">Active Now</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            {!p.isCurrent && (
+                                                                <Button variant="ghost" size="sm" className="h-10 px-4 text-xs font-black uppercase tracking-widest border-2 border-transparent hover:border-primary/20 hover:bg-primary/5 text-primary rounded-xl transition-all" onClick={() => handleSetCurrentPeriod(p.id)} disabled={isSubmitting}>
+                                                                    Set Active
+                                                                </Button>
+                                                            )}
+                                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                                <Button variant="ghost" size="icon" className="h-10 w-10 text-primary hover:bg-primary/10 rounded-xl" onClick={() => {
+                                                                    setEditingPeriodId(p.id);
+                                                                    setNewPeriodForm({
+                                                                        year: p.year,
+                                                                        term: p.term,
+                                                                        startDate: p.startDate || '',
+                                                                        endDate: p.endDate || '',
+                                                                        vacationDate: p.vacationDate || '',
+                                                                        nextTermBegins: p.nextTermBegins || '',
+                                                                        installmentPlan: p.installmentPlan || []
+                                                                    });
+                                                                }} disabled={isSubmitting}>
+                                                                    <Edit className="h-4 w-4" />
+                                                                </Button>
+                                                                <Button variant="ghost" size="icon" className="h-10 w-10 text-destructive hover:bg-destructive/10 rounded-xl" onClick={() => {
+                                                                    if (confirm(`Delete ${p.term} for ${p.year}?`)) {
+                                                                        handleDeleteAcademicPeriod(p.id);
+                                                                    }
+                                                                }} disabled={isSubmitting}>
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </section>
                                 </div>
-                            </section>
-                        </div>
+                            </div>
+                        </ScrollArea>
                     </DialogContent>
                 </Dialog>
             </div>
@@ -4998,7 +5284,6 @@ function AdminDashboard() {
                 </AlertDialogContent>
             </AlertDialog>
             </>
-        </TooltipProvider>
     );
 }
 
@@ -5126,9 +5411,11 @@ const ExpenditureSection: React.FC<ExpenditureSectionProps> = ({
 
 export default function AdminDashboardPage() {
     return (
-        <Suspense fallback={<div className="min-h-screen w-full flex items-center justify-center bg-background"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>}>
-            <AdminDashboard />
-        </Suspense>
+        <TooltipProvider>
+            <Suspense fallback={<div className="min-h-screen w-full flex items-center justify-center bg-background"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>}>
+                <AdminDashboard />
+            </Suspense>
+        </TooltipProvider>
     )
 }
 

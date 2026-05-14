@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
+import { sendNotificationToUser } from '@/lib/notification-utils';
 
 /**
  * Hubtel Status Check API
@@ -53,14 +54,14 @@ export async function GET(req: Request) {
         }
 
         const schoolData = schoolDoc.data();
-        const { hubtelClientId, hubtelClientSecret, hubtelMerchantNumber } = schoolData || {};
+        const { hubtelPaymentClientId, hubtelPaymentClientSecret, hubtelMerchantNumber } = schoolData || {};
 
-        if (!hubtelClientId || !hubtelClientSecret || !hubtelMerchantNumber) {
-            return NextResponse.json({ error: 'Hubtel is not configured for this school' }, { status: 400 });
+        if (!hubtelPaymentClientId || !hubtelPaymentClientSecret || !hubtelMerchantNumber) {
+            return NextResponse.json({ error: 'Hubtel Payment Gateway is not configured for this school' }, { status: 400 });
         }
 
         // 1. Fetch status from Hubtel
-        const authHeader = Buffer.from(`${hubtelClientId}:${hubtelClientSecret}`).toString('base64');
+        const authHeader = Buffer.from(`${hubtelPaymentClientId}:${hubtelPaymentClientSecret}`).toString('base64');
         
         // We prefer checking by transactionId if available, otherwise clientReference
         let hubtelUrl = `https://api.hubtel.com/v1/merchantaccount/merchants/${hubtelMerchantNumber}/transactions/status`;
@@ -104,7 +105,18 @@ export async function GET(req: Request) {
         const status = (transaction as any).Status || (transaction as any).transactionStatus || (transaction as any).status;
         const actualTxId = (transaction as any).TransactionId || (transaction as any).hubtelTransactionId || (transaction as any).transactionId || transactionIdParam;
         const amount = (transaction as any).Amount || (transaction as any).amount || (transaction as any).totalAmount;
-        const description = (transaction as any).Description || (transaction as any).description || 'Online Payment (Manual Verification)';
+        let description = (transaction as any).Description || (transaction as any).description || 'Online Payment (Manual Verification)';
+
+        // Prioritize our stored description which has itemized details
+        if (incomingRef && incomingRef.startsWith('PAY-')) {
+            const pendingDoc = await db.collection('pending_payments').doc(incomingRef).get();
+            if (pendingDoc.exists) {
+                const pData = pendingDoc.data();
+                if (pData?.description) {
+                    description = pData.description;
+                }
+            }
+        }
 
         const isSuccess = status === 'Success' || status === 'Successful' || result.ResponseCode === '0000' || (transaction as any).ResponseCode === '0000';
 
@@ -154,6 +166,22 @@ export async function GET(req: Request) {
             await studentRef.update({
                 ledger: FieldValue.arrayUnion(ledgerEntry)
             });
+
+            // 3. Trigger Push Notification to Parent
+            try {
+                const schoolName = schoolData?.name || 'School';
+                await sendNotificationToUser(studentId, {
+                    title: 'Payment Successful',
+                    body: `GH¢${originalAmount || amount} has been received for ${studentData?.firstName || 'your student'}. Thank you!`,
+                    data: {
+                        type: 'payment_success',
+                        studentId: studentId,
+                        schoolId: schoolId
+                    }
+                });
+            } catch (notifyError) {
+                console.error('Failed to send payment notification:', notifyError);
+            }
 
             return NextResponse.json({ 
                 status: 'success', 

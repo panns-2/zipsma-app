@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { initializeFirebase } from '@/firebase/index';
 import { getFirebaseConfig } from '@/firebase/config';
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { sendNotificationToUser, sendNotificationToAllParents } from '@/lib/notification-utils';
 
 // Initialize Firebase using the project's standard configuration
 const { db } = initializeFirebase(getFirebaseConfig());
@@ -9,14 +10,15 @@ const { db } = initializeFirebase(getFirebaseConfig());
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { schoolId, message, recipient, specificParent } = body;
+        const { schoolId, message, recipient, specificParent, notificationOnly } = body;
 
         if (!schoolId || !message || !recipient) {
             return NextResponse.json({ error: 'Missing required parameters: schoolId, message, or recipient' }, { status: 400 });
         }
 
-        // 1. Fetch Sendexa credentials from the specific school (e.g., Panns Education Centre)
-        const schoolDocRef = doc(db, 'schools', schoolId);
+        // 1. Fetch Hubtel credentials from the specific school
+        const normalizedSchoolId = schoolId.toUpperCase();
+        const schoolDocRef = doc(db, 'schools', normalizedSchoolId);
         const schoolDoc = await getDoc(schoolDocRef);
         
         if (!schoolDoc.exists()) {
@@ -24,11 +26,15 @@ export async function POST(request: Request) {
         }
         
         const schoolData = schoolDoc.data();
-        const sendexaApiToken = schoolData?.sendexaApiToken;
-        const sendexaSenderId = schoolData?.sendexaSenderId;
+        const hubtelClientId = schoolData?.hubtelSmsClientId?.trim();
+        const hubtelClientSecret = schoolData?.hubtelSmsClientSecret?.trim();
+        let hubtelSenderId = schoolData?.hubtelSenderId?.trim() || schoolData?.name || 'ZipSMA';
+        
+        // Clean sender ID: Alphanumeric only, max 11 chars as per Hubtel requirements
+        hubtelSenderId = hubtelSenderId.replace(/[^a-zA-Z0-9]/g, '').substring(0, 11);
 
-        if (!sendexaApiToken || !sendexaSenderId) {
-            return NextResponse.json({ error: 'Missing Sendexa setup for this school. Please check SMS Gateway settings.' }, { status: 400 });
+        if (!hubtelClientId || !hubtelClientSecret) {
+            return NextResponse.json({ error: 'Missing Hubtel setup for this school. Please ensure Client ID and Client Secret are saved in Hubtel settings.' }, { status: 400 });
         }
 
         // 2. Fetch recipients (only parents of this specific school)
@@ -45,7 +51,6 @@ export async function POST(request: Request) {
                 }
             });
         } else if (recipient === 'specific' && specificParent) {
-            // First check if specificParent is a studentId
             const studentDocRef = doc(db, 'students', specificParent);
             const studentDoc = await getDoc(studentDocRef);
             
@@ -56,7 +61,6 @@ export async function POST(request: Request) {
                     if (parentPhone) targetPhones.add(parentPhone.trim());
                 }
             } else {
-                 // Try to check if specificParent is a Parent ID grouping
                  const studentsRef = collection(db, 'students');
                  const q = query(studentsRef, 
                      where('schoolId', '==', schoolId.toUpperCase()), 
@@ -70,50 +74,88 @@ export async function POST(request: Request) {
             }
         }
 
-        if (targetPhones.size === 0) {
-            return NextResponse.json({ error: 'Could not find any valid parent phone numbers to send SMS to.' }, { status: 400 });
-        }
-
-        // 3. Send SMS to all valid phones via Sendexa
         let successfulSends = 0;
         let errors: string[] = [];
 
-        for (const phone of targetPhones) {
-            try {
-                // Use the exact Sendexa v1 endpoint provided by the user
-                const response = await fetch('https://api.sendexa.co/v1/sms/send', {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json', 
-                        'Accept': 'application/json',
-                        'Authorization': `Basic ${sendexaApiToken}`
-                    },
-                    body: JSON.stringify({ 
-                        from: sendexaSenderId, 
-                        to: phone, 
-                        message: message 
-                    }),
-                });
+        // Hubtel credentials for Basic Auth
+        const authHeader = Buffer.from(`${hubtelClientId}:${hubtelClientSecret}`).toString('base64');
 
-                if (response.ok) {
-                    successfulSends++;
-                } else {
-                    const errorText = await response.text();
-                    errors.push(`Status ${response.status}: ${errorText}`);
+        const isNotificationOnly = notificationOnly === true || notificationOnly === 'true';
+
+        // 3. Send SMS to all valid phones via Hubtel (Skip if notificationOnly is true)
+        if (!isNotificationOnly) {
+            for (const phone of targetPhones) {
+                try {
+                    // Ensure phone is in international format if needed, but Hubtel handles local Ghanaian formats well
+                    const formattedPhone = phone.startsWith('0') ? '233' + phone.substring(1) : phone;
+
+                    const response = await fetch('https://api.hubtel.com/v1/messages/send', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json', 
+                            'Authorization': `Basic ${authHeader}`
+                        },
+                        body: JSON.stringify({ 
+                            From: hubtelSenderId, 
+                            To: formattedPhone, 
+                            Content: message,
+                            Type: 0,
+                            clientid: hubtelClientId, // Explicitly include clientid in body for Status 12 resolution
+                            ClientReference: `sms_${Date.now()}_${Math.floor(Math.random() * 1000)}`
+                        }),
+                    });
+
+                    if (response.ok) {
+                        successfulSends++;
+                    } else {
+                        const responseText = await response.text();
+                        let errorMessage = 'Unknown Hubtel error';
+                        try {
+                            const errorData = JSON.parse(responseText);
+                            // Hubtel uses different fields for errors depending on the version (message, Message, Errors, etc)
+                            errorMessage = errorData.message || errorData.Message || errorData.Errors?.[0]?.Message || responseText;
+                        } catch (e) {
+                            errorMessage = responseText || 'Unknown Hubtel error';
+                        }
+                        errors.push(`Status ${response.status}: ${errorMessage}`);
+                    }
+                } catch (err: any) {
+                    errors.push(`Network error: ${err.message}`);
                 }
-            } catch (err: any) {
-                errors.push(`Network error: ${err.message}`);
             }
         }
+        
+        // 4. Trigger Push Notifications (FCM) in parallel
+        try {
+            const notificationPayload = {
+                title: schoolData?.name || 'School Update',
+                body: message,
+                data: { schoolId: normalizedSchoolId, type: 'announcement' }
+            };
 
-        if (successfulSends > 0) {
+            if (recipient === 'all') {
+                sendNotificationToAllParents(normalizedSchoolId, notificationPayload);
+            } else if (recipient === 'specific' && specificParent) {
+                // If specificParent is a studentId, we might need to find their parentId
+                // However, the register route uses whatever id is in the URL (urlId),
+                // and the dashboard pass urlId to useFCM.
+                // In parents dashboard, urlId is either parentId or studentId.
+                sendNotificationToUser(specificParent, notificationPayload);
+            }
+        } catch (fcmError) {
+            console.error('FCM sending failed but SMS was processed:', fcmError);
+        }
+
+        if (isNotificationOnly || successfulSends > 0) {
             return NextResponse.json({ 
                 success: true, 
-                message: `Successfully sent SMS to ${successfulSends} recipient(s). ${errors.length > 0 ? `Failed: ${errors.length}` : ''}`
+                message: isNotificationOnly 
+                    ? "Push notification sent successfully."
+                    : `Successfully sent SMS to ${successfulSends} recipient(s). ${errors.length > 0 ? `Failed: ${errors.length}` : ''}`
             });
         } else {
             return NextResponse.json({ 
-                error: `SMS sending failed: ${errors[0] || 'Unknown error'}. Check Sendexa credentials/balance.` 
+                error: `SMS sending failed: ${errors[0] || 'Unknown error'}. Check Hubtel credentials/balance.` 
             }, { status: 500 });
         }
 

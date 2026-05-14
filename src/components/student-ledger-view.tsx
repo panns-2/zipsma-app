@@ -5,7 +5,7 @@ import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Student, LedgerTransaction, AcademicPeriod, FeeCategory, isDailyTransaction } from '@/lib/data-store';
+import { Student, LedgerTransaction, AcademicPeriod, FeeCategory, isDailyTransaction, calculateInstallmentExpectedAmount } from '@/lib/data-store';
 import { cn } from '@/lib/utils';
 import { Landmark, TrendingUp, TrendingDown, Receipt, Utensils, UtensilsCrossed } from 'lucide-react';
 
@@ -15,9 +15,10 @@ interface StudentLedgerViewProps {
     selectedPeriodId: string;
     feeCategories: FeeCategory[];
     schoolId?: string;
+    feeDiscount?: number;
 }
 
-export const StudentLedgerView: React.FC<StudentLedgerViewProps> = ({ student, periods, selectedPeriodId, feeCategories, schoolId }) => {
+export const StudentLedgerView: React.FC<StudentLedgerViewProps> = ({ student, periods, selectedPeriodId, feeCategories, schoolId, feeDiscount }) => {
     const { totals, displayLedger, balanceBF, feeBreakdown, dailyFeeBreakdown } = useMemo(() => {
         const fullLedger = (student.ledger || []).filter(t => !t.isVoided);
         
@@ -69,39 +70,31 @@ export const StudentLedgerView: React.FC<StudentLedgerViewProps> = ({ student, p
 
         const dailyFeeBreakdown: Record<string, number> = {};
 
-        // 1. Process Feeding Fee specifically using student.dailyFeedingCost (Canonical Source)
-        if (student.dailyFeedingCost > 0) {
-            const amount = daysPresentInPeriod * student.dailyFeedingCost;
-            dailyAccruedInfo += amount;
-            accruedFeeding += amount;
-            dailyFeeBreakdown['Feeding Fee'] = amount;
-        }
-        
-        // 2. Process other dynamic daily fee categories using the official category list
-        // This loop matches Admin deduplication by skipping any category that matches the main feeding fee
+        // Process all dynamic daily fee categories using the official category list
         feeCategories.filter(c => c.isDaily).forEach(cat => {
             const normName = cat.name.toLowerCase().trim();
-            const normId = cat.id.toLowerCase().trim();
+            const normId = cat.id;
             
-            // Skip if it's a variant of the main feeding fee (already processed via dailyFeedingCost)
-            if (normName === 'feeding fee' || normName === 'feeding' || normId === 'feeding' || (dynamicFeedingId && normId === dynamicFeedingId)) return;
-
+            // Find student's assigned rate for this category
             const studentRate = (student.dailyFees || []).find(f => 
-                (f.categoryId && f.categoryId.toLowerCase().trim() === normId)
+                f.categoryId === normId
             )?.rate || 0;
 
             const amount = daysPresentInPeriod * Number(studentRate);
             if (amount > 0) {
                 dailyAccruedInfo += amount;
                 dailyFeeBreakdown[cat.name] = (dailyFeeBreakdown[cat.name] || 0) + amount;
+
+                // Track feeding specifically for the info boxes if this is the feeding category
+                if (normName === 'feeding fee' || normName === 'feeding' || normId === 'feeding') {
+                    accruedFeeding += amount;
+                }
             }
         });
 
-        // 3. Aggregate Total Balance per User Specification: Main Fee Sum + Total Daily Accrued
-        // Note: mainData.balance already includes Main BF, Main Billed, and ALL Payments (Main + Daily)
-        // because isDailyTransaction might not catch all daily payments, but catch all daily debits.
-        // To be safe and strictly follow user formula:
-        const totalOutstanding = mainData.balance + dailyAccruedInfo;
+        // 3. Aggregate Total Balance
+        // Total = (Main Balance) + (Daily Balance from ledger + Daily Accrued from attendance)
+        const totalOutstanding = mainData.balance + dailyData.balance + dailyAccruedInfo;
 
         // Calculate Term Feeding Total (from ledger debits - for info only)
         const termFeedingTotalLedger = [...dailyData.currentTransactions, ...mainData.currentTransactions]
@@ -112,7 +105,7 @@ export const StudentLedgerView: React.FC<StudentLedgerViewProps> = ({ student, p
             ))
             .reduce((sum, t) => sum + (Number(t.debit) || 0), 0);
 
-        const feeBreakdown = [...dailyData.currentTransactions, ...mainData.currentTransactions]
+        const feeBreakdown = mainData.currentTransactions
             .filter(t => t.debit > 0)
             .reduce((acc, t) => {
                 const cat = t.category || 'General';
@@ -120,11 +113,18 @@ export const StudentLedgerView: React.FC<StudentLedgerViewProps> = ({ student, p
                 return acc;
             }, {} as Record<string, number>);
 
+        // Installment Logic
+        const currentPeriod = periods.find(p => p.id === selectedPeriodId);
+        const expectedAmount = currentPeriod ? calculateInstallmentExpectedAmount(student, currentPeriod, feeCategories) : mainData.billed;
+        const actualPaidMain = mainData.paid;
+        const mainOutstandingAtDeadline = Math.max(0, expectedAmount - actualPaidMain);
+
         return {
             balanceBF: mainData.bf + dailyData.bf,
             displayLedger: [...dailyData.currentTransactions, ...mainData.currentTransactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
             feeBreakdown,
             dailyFeeBreakdown,
+            currentPeriod,
             totals: {
                 billed: mainData.billed + dailyData.billed,
                 paid: mainData.paid + dailyData.paid,
@@ -133,10 +133,12 @@ export const StudentLedgerView: React.FC<StudentLedgerViewProps> = ({ student, p
                 dailyOutstanding: dailyData.balance,
                 dailyAccrued: dailyAccruedInfo,
                 accruedFeeding: accruedFeeding,
-                termFeedingTotal: termFeedingTotalLedger
+                termFeedingTotal: termFeedingTotalLedger,
+                expectedAmount,
+                mainOutstandingAtDeadline
             }
         };
-    }, [student.ledger, student.attendance, student.dailyFees, student.dailyFeedingCost, periods, selectedPeriodId, feeCategories, schoolId]);
+    }, [student.ledger, student.attendance, student.dailyFees, periods, selectedPeriodId, feeCategories, schoolId]);
 
     return (
         <div className="space-y-6">
@@ -145,11 +147,11 @@ export const StudentLedgerView: React.FC<StudentLedgerViewProps> = ({ student, p
                 <Card className="border-[2px] border-primary shadow-sm bg-card">
                     <CardContent className="p-4 md:p-6">
                         <div className="flex items-center justify-between mb-2">
-                            <p className="text-[10px] md:text-xs font-bold uppercase tracking-wide text-muted-foreground">Main Fee Sum</p>
+                            <p className="text-[10px] md:text-xs font-bold uppercase tracking-wide text-muted-foreground">Expected by Date</p>
                             <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-primary" />
                         </div>
-                        <p className="text-lg md:text-2xl font-bold font-sans">GH¢{totals.mainOutstanding.toFixed(2)}</p>
-                        <p className="text-[8px] md:text-[10px] mt-1 text-muted-foreground italic">Term Fees + Arrears</p>
+                        <p className="text-lg md:text-2xl font-bold font-sans">GH¢{totals.expectedAmount.toFixed(2)}</p>
+                        <p className="text-[8px] md:text-[10px] mt-1 text-muted-foreground italic">Based on Installment Plan</p>
                     </CardContent>
                 </Card>
 
@@ -197,10 +199,25 @@ export const StudentLedgerView: React.FC<StudentLedgerViewProps> = ({ student, p
                         <p className="text-sm font-bold text-primary">GH¢{totals.termFeedingTotal.toFixed(2)}</p>
                     </div>
                 </div>
-                <div className="text-right">
+            <div className="text-right">
                     <p className="text-[10px] font-medium text-muted-foreground italic">Cumulative attendance fees</p>
                 </div>
             </div>
+
+            {feeDiscount && feeDiscount > 0 ? (
+                <div className="p-4 bg-emerald-50 border-2 border-emerald-200 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-emerald-100 rounded-lg">
+                            <TrendingDown className="w-5 h-5 text-emerald-600" />
+                        </div>
+                        <div>
+                            <p className="text-xs font-black text-emerald-800 uppercase tracking-tight">Active Fee Discount: {feeDiscount}%</p>
+                            <p className="text-[10px] text-emerald-600 font-medium italic">This student receives a {feeDiscount}% reduction on all main school fees.</p>
+                        </div>
+                    </div>
+                    <Badge className="bg-emerald-600 text-white font-bold uppercase tracking-widest text-[9px]">Applied</Badge>
+                </div>
+            ) : null}
             
             {/* Fee Breakdown Summary */}
             {(Object.keys(feeBreakdown).length > 0 || Object.keys(dailyFeeBreakdown).length > 0) && (
@@ -287,12 +304,18 @@ export const StudentLedgerView: React.FC<StudentLedgerViewProps> = ({ student, p
                                                             displayDesc = `Daily Fee: ${t.category.charAt(0).toUpperCase() + t.category.slice(1).replace(/_/g, ' ')}`;
                                                         }
                                                     }
+                                                    
+                                                    const discountPercent = feeDiscount ?? 0;
+                                                    if (discountPercent > 0 && t.type === 'fee' && !displayDesc.includes('Discount')) {
+                                                        displayDesc = `${displayDesc} (${discountPercent}% Discount)`;
+                                                    }
+
                                                     return <span className="font-bold text-sm tracking-tight">{displayDesc}</span>;
                                                 })()}
                                                 <span className="text-[10px] uppercase font-bold text-muted-foreground">
                                                     {t.type === 'payment' ? 'Payment Received' : 
                                                      t.type === 'adjustment' ? 'Adjustment' :
-                                                     (t.description.toLowerCase().includes('daily') || ['feeding', 'transportation'].includes(t.category?.toLowerCase() || '')) ? 'Daily Fee' : 'Term Fee'}
+                                                     isDailyTransaction(t, feeCategories) ? 'Daily Fee' : 'Term Fee'}
                                                 </span>
                                             </div>
                                         </TableCell>

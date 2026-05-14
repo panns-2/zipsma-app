@@ -1,5 +1,6 @@
 import { getApps, initializeApp, getApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
 
 /**
  * Robust Firebase Admin Database fetcher.
@@ -25,16 +26,24 @@ export function getAdminDb() {
           }),
         });
       } catch (err) {
-        // If it was somehow initialized between the check and now, use the existing one
         app = getApp();
       }
     } else {
       // 2. Default initialization (Works automatically in Firebase Cloud Functions / GCP)
+      // On local dev, this will fail if GOOGLE_APPLICATION_CREDENTIALS is not set.
+      if (process.env.NODE_ENV === 'development' && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+         console.warn('Firebase Admin: No credentials found for local development. Please add FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY to your .env.local file.');
+      }
+      
       console.log('Firebase Admin: Initializing with Default Credentials');
       try {
-        app = initializeApp();
+        app = initializeApp({ projectId });
       } catch (err) {
-        app = getApp();
+        try {
+          app = getApp();
+        } catch (e) {
+          throw new Error('Firebase Admin SDK failed to initialize. If you are running locally, ensure you have added FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY to your .env.local file.');
+        }
       }
     }
   } else {
@@ -43,3 +52,13 @@ export function getAdminDb() {
 
   return getFirestore(app);
 }
+
+export function getAdminMessaging() {
+  const apps = getApps();
+  if (apps.length === 0) {
+      // This will initialize the app if it hasn't been already
+      getAdminDb();
+  }
+  return getMessaging(getApp());
+}
+

@@ -1,7 +1,7 @@
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
 
 @layer base {
   :root {
@@ -27,14 +27,18 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 219 100% 18%;
     --radius: 0.75rem;
-    --sidebar-background: 210 93% 22%;
+    --sidebar-background: 219 100% 18%;
     --sidebar-foreground: 0 0% 98%;
     --sidebar-primary: 210 40% 98%;
-    --sidebar-primary-foreground: 210 93% 22%;
-    --sidebar-accent: 210 93% 15%;
+    --sidebar-primary-foreground: 219 100% 18%;
+    --sidebar-accent: 219 100% 12%;
     --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 210 93% 22%;
+    --sidebar-border: 219 100% 18%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Premium Facebook-style System Font Stack */
+    --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    --font-jakarta: var(--font-sans);
   }
   .dark {
     --background: 210 50% 10%;
@@ -74,21 +78,21 @@
     filter: brightness(0) saturate(100%) invert(8%) sepia(87%) saturate(3665%) hue-rotate(203deg) brightness(97%) contrast(101%);
   }
 
-  /* Typography System */
+  /* Typography System - Reverted to font-sans per user request */
   .text-heading-xl {
-    @apply font-jakarta text-2xl font-bold tracking-tight;
+    @apply font-sans text-2xl font-bold tracking-tight;
   }
   .text-heading-lg {
-    @apply font-jakarta text-xl font-bold tracking-tight;
+    @apply font-sans text-xl font-bold tracking-tight;
   }
   .text-heading-md {
-    @apply font-jakarta text-lg font-bold;
+    @apply font-sans text-lg font-bold;
   }
   .text-heading-sm {
-    @apply font-jakarta text-base font-bold;
+    @apply font-sans text-base font-bold;
   }
   .text-label-caps {
-    @apply font-jakarta text-[10px] font-bold uppercase tracking-widest text-muted-foreground;
+    @apply font-sans text-[10px] font-bold uppercase tracking-widest text-muted-foreground;
   }
   .text-body-sm {
     @apply font-sans text-sm font-medium;
@@ -97,7 +101,7 @@
     @apply font-sans text-xs font-medium;
   }
   .text-numeric {
-    @apply font-jakarta font-bold;
+    @apply font-sans font-bold;
   }
 }
 

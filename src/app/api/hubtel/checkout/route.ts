@@ -19,10 +19,10 @@ export async function POST(req: Request) {
         }
 
         const schoolData = schoolDoc.data();
-        const { hubtelMerchantNumber, hubtelClientId, hubtelClientSecret } = schoolData || {};
+        const { hubtelMerchantNumber, hubtelPaymentClientId, hubtelPaymentClientSecret } = schoolData || {};
 
-        if (!hubtelMerchantNumber || !hubtelClientId || !hubtelClientSecret) {
-            return NextResponse.json({ error: 'Hubtel is not configured for this school' }, { status: 400 });
+        if (!hubtelMerchantNumber || !hubtelPaymentClientId || !hubtelPaymentClientSecret) {
+            return NextResponse.json({ error: 'Hubtel Payment Gateway is not configured for this school. Please update settings in the Admin Dashboard.' }, { status: 400 });
         }
 
         // 2. Generate a clean Payment Reference (Anonymized)
@@ -78,7 +78,8 @@ export async function POST(req: Request) {
         };
 
         // 3. Call Hubtel API
-        const authHeader = 'Basic ' + Buffer.from(`${hubtelClientId.trim()}:${hubtelClientSecret.trim()}`).toString('base64');
+        // 3. Initiate payment request to Hubtel
+        const authHeader = 'Basic ' + Buffer.from(`${hubtelPaymentClientId.trim()}:${hubtelPaymentClientSecret.trim()}`).toString('base64');
         
         console.log('Calling Hubtel PayProxy API (Reverted)...');
         const response = await fetch(`https://payproxyapi.hubtel.com/items/initiate`, {

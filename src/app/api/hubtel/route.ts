@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
+import { sendNotificationToUser } from '@/lib/notification-utils';
 
 // Hubtel Webhook Secret (Optional but recommended for security)
 // You can set this in your Hubtel Merchant Portal
@@ -34,7 +35,7 @@ async function handler(req: Request) {
         const clientReference = transaction.ClientReference || transaction.clientReference;
         const amount = transaction.Amount || transaction.amount || transaction.TotalAmount || transaction.totalAmount;
         const transactionId = transaction.TransactionId || transaction.transactionId || transaction.HubtelTransactionId;
-        const description = transaction.Description || transaction.description || 'Online Payment (Hubtel)';
+        let description = transaction.Description || transaction.description || 'Online Payment (Hubtel)';
         
         const isSuccess = ResponseCode === "0000" || Status === 'Success' || transaction.Status === 'Success';
 
@@ -59,6 +60,11 @@ async function handler(req: Request) {
                     schoolId = pendingData?.schoolId;
                     periodId = pendingData?.periodId || periodId;
                     
+                    // Prioritize our stored description which has itemized details
+                    if (pendingData?.description) {
+                        description = pendingData.description;
+                    }
+
                     // CRITICAL: Use the amount we originally requested, NOT the total including fees
                     if (pendingData?.amount) {
                         console.log(`[${timestamp}] Hubtel Sync: Overriding amount ${amount} with original fee amount ${pendingData.amount}`);
@@ -148,6 +154,21 @@ async function handler(req: Request) {
                 await studentRef.update({
                     ledger: FieldValue.arrayUnion(ledgerEntry)
                 });
+
+                // Trigger Push Notification
+                try {
+                    await sendNotificationToUser(studentId, {
+                        title: 'Payment Received',
+                        body: `GH¢${originalAmount} has been credited to the account. Thank you!`,
+                        data: {
+                            type: 'payment_success',
+                            studentId: studentId,
+                            schoolId: schoolId
+                        }
+                    });
+                } catch (notifyError) {
+                    console.error('Failed to send webhook payment notification:', notifyError);
+                }
             }
 
             console.log(`[${timestamp}] Hubtel Sync Success: Updated ledger for Student: ${studentId}, Amount: GH¢${amount}, Period: ${periodId}, TxId: ${transactionId}`);

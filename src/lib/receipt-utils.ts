@@ -81,25 +81,26 @@ export const generateReceipt = (school: School, student: Student, payment: Payme
     let totalBilled = 0;
     let totalPaid = 0;
     
-    if (type === 'General') {
-        const generalBilled = (student.generalFees || []).reduce((sum, f) => sum + Number(f.amount || 0), 0);
+    // Calculate totals from the unified ledger
+    const ledger = student.ledger || [];
+    const targetCategory = type.toLowerCase();
+    
+    // Filter transactions relevant to this receipt type
+    const relevantTransactions = ledger.filter(t => {
+        if (t.isVoided) return false;
+        const cat = (t.category || '').toLowerCase();
+        const catId = (t.categoryId || '').toLowerCase();
         
-        // Add attendance-based custom daily fees to general balance if type is General
-        const attendedDays = (student.attendance || []).filter(a => a.attended).length;
-        const customDailyBilled = (student.dailyFees || []).reduce((sum, df) => {
-            return sum + (attendedDays * (df.rate || 0));
-        }, 0);
+        // Match specific legacy categories or the specific category ID
+        if (targetCategory === 'general') return cat === 'general' || catId === 'general' || !cat;
+        if (targetCategory === 'feeding') return cat === 'feeding' || catId === 'feeding';
+        if (targetCategory === 'transportation') return cat === 'transportation' || catId === 'transportation';
         
-        totalBilled = generalBilled + customDailyBilled;
-        totalPaid = (student.generalPayments || []).reduce((sum, p) => sum + p.amount, 0);
-    } else if (type === 'Transportation') {
-        totalBilled = Number(student.transportationCost || 0);
-        totalPaid = (student.transportationPayments || []).reduce((sum, p) => sum + p.amount, 0);
-    } else if (type === 'Feeding') {
-        const attendedDays = (student.attendance || []).filter(a => a.attended).length;
-        totalBilled = attendedDays * (Number(student.dailyFeedingCost) || 0);
-        totalPaid = (student.feedingFeePayments || []).reduce((sum, p) => sum + p.amount, 0);
-    }
+        return cat === targetCategory || catId === targetCategory;
+    });
+
+    totalBilled = relevantTransactions.reduce((sum, t) => sum + (Number(t.debit) || 0), 0);
+    totalPaid = relevantTransactions.reduce((sum, t) => sum + (Number(t.credit) || 0), 0);
     
     const currentBalance = totalBilled - totalPaid;
     const previousBalance = currentBalance + payment.amount;

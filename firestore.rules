@@ -14,13 +14,26 @@ service cloud.firestore {
       return isSuperAdmin() || 
              (request.auth != null && schoolId != null && 
               ((exists(/databases/$(database)/documents/schools/$(schoolId)) && get(/databases/$(database)/documents/schools/$(schoolId)).data.adminUid == request.auth.uid) ||
-               (exists(/databases/$(database)/documents/schools/$(schoolId.upper())) && get(/databases/$(database)/documents/schools/$(schoolId.upper())).data.adminUid == request.auth.uid)));
+               (exists(/databases/$(database)/documents/schools/$(schoolId.upper())) && get(/databases/$(database)/documents/schools/$(schoolId.upper())).data.adminUid == request.auth.uid) ||
+               (exists(/databases/$(database)/documents/schools/$(schoolId.lower())) && get(/databases/$(database)/documents/schools/$(schoolId.lower())).data.adminUid == request.auth.uid)));
     }
 
     function isSuperAdmin() {
         return request.auth != null && 
                (request.auth.uid == 'KpzZ3S5XFRPAeNiB9PneLK1Y1aB3' || 
                 request.auth.token.email == 'solandy242@gmail.com');
+    }
+
+    function isStaffAdmin(schoolId) {
+      return request.auth != null && schoolId != null && 
+             (
+              (exists(/databases/$(database)/documents/staff/$(request.auth.uid)) && 
+               (get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.schoolId.upper() == schoolId.upper()) &&
+               (get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role == 'Administrator' || 
+                get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role == 'Principal' ||
+                get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role == 'Accountant'))
+              || isSchoolAdmin(schoolId)
+             );
     }
 
     // --- Global Application Settings ---
@@ -72,22 +85,24 @@ service cloud.firestore {
     // --- Rules for Students ---
     match /students/{studentId} {
         // Admins can create, read, and delete students.
-        allow create: if isSchoolAdmin(request.resource.data.schoolId);
-        allow read, delete: if isSchoolAdmin(resource.data.schoolId);
+        allow create: if isSchoolAdmin(request.resource.data.get('schoolId', null));
+        allow read, delete: if isSchoolAdmin(resource.data.get('schoolId', null));
         
         // Anyone can get a student doc or list students (for dashboards)
         allow get, list: if true;
 
-        // Updates are allowed if EITHER the user is an admin for that school
-        // OR the only field being changed is 'attendance'.
-        allow update: if isSchoolAdmin(resource.data.schoolId) || 
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendance']);
+        // Updates are allowed if:
+        // 1. The user is a super admin or school admin for the current/new school ID.
+        // 2. The user is a staff member with administrative role.
+        // 3. OR the update is restricted to ONLY the 'attendance' field.
+        allow update: if isSuperAdmin() || 
+                         isSchoolAdmin(resource.data.get('schoolId', null)) || 
+                         isSchoolAdmin(request.resource.data.get('schoolId', null)) ||
+                         isStaffAdmin(resource.data.get('schoolId', null)) ||
+                         isStaffAdmin(request.resource.data.get('schoolId', null)) ||
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendance', 'ledger', 'schoolId']);
     }
 
-    // --- Staff, Finances, and Admin Data ---
-    
-    // --- Staff, Finances, and Admin Data ---
-    
     // --- Staff, Finances, and Admin Data ---
     
     match /staff/{docId} {
@@ -133,10 +148,10 @@ service cloud.firestore {
     }
 
     match /feeCategories/{categoryId} {
+      allow read: if true;
       allow create: if isSchoolAdmin(request.resource.data.schoolId);
-      allow update: if isSchoolAdmin(resource.data.schoolId);
-      allow read, delete: if isSchoolAdmin(resource.data.schoolId);
-      allow list: if isSchoolAdmin(resource.data.schoolId);
+      allow update, delete: if isSchoolAdmin(resource.data.schoolId);
+      allow list: if true;
     }
 
     match /dailyFeeCategories/{categoryId} {
@@ -144,6 +159,10 @@ service cloud.firestore {
       allow update: if isSchoolAdmin(request.resource.data.schoolId);
       allow read, delete: if isSchoolAdmin(resource.data.schoolId);
       allow list: if isSchoolAdmin(resource.data.schoolId);
+    }
+
+    match /cron_logs/{logId} {
+      allow read, list: if (resource.data.schoolId == 'global' && request.auth != null) || isSchoolAdmin(resource.data.schoolId);
     }
 
     match /pending_payments/{docId} {

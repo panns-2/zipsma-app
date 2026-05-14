@@ -12,9 +12,10 @@ interface StudentProfileProps {
   onRefresh: () => void;
   isRefreshing: boolean;
   onEdit: () => void;
+  feeDiscount?: number;
 }
 
-export default function StudentProfile({ name, studentClass, studentId, profilePicture, onRefresh, isRefreshing, onEdit }: StudentProfileProps) {
+export default function StudentProfile({ name, studentClass, studentId, profilePicture, onRefresh, isRefreshing, onEdit, feeDiscount }: StudentProfileProps) {
   return (
     <div className="mb-6 md:mb-24">
       {/* Banner */}
@@ -48,6 +49,11 @@ export default function StudentProfile({ name, studentClass, studentId, profileP
                     <Badge variant="secondary" className="bg-primary/10 text-primary font-bold px-3 py-1 rounded-full uppercase tracking-wider text-[10px]">
                         Active Student
                     </Badge>
+                    {feeDiscount && feeDiscount > 0 ? (
+                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold px-3 py-1 rounded-full uppercase tracking-wider text-[10px] animate-pulse">
+                            {feeDiscount}% Fee Discount Applied
+                        </Badge>
+                    ) : null}
                 </div>
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 md:gap-4 text-gray-500 font-medium text-sm">
                     <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-primary" /> {studentClass}</span>

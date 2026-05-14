@@ -32,6 +32,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useIdleTimeout } from '@/hooks/use-idle-timeout';
 import { useToast } from '@/hooks/use-toast';
+import { useFCM } from '@/hooks/use-fcm';
 import ReactMarkdown from 'react-markdown';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -56,6 +57,37 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+
+// Notification Prompt Component
+const NotificationPrompt = ({ permission, requestPermission }: { permission: NotificationPermission, requestPermission: () => void }) => {
+    if (permission !== 'default') return null;
+
+    return (
+        <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+            <Card className="border-none shadow-xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white overflow-hidden relative">
+                <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <Smartphone className="w-24 h-24 rotate-12" />
+                </div>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-lg font-black flex items-center gap-2">
+                        <Smartphone className="w-5 h-5" /> Stay Updated!
+                    </CardTitle>
+                    <CardDescription className="text-blue-100 text-sm font-medium">
+                        Enable push notifications to receive real-time alerts for school announcements and fee reminders directly on your phone.
+                    </CardDescription>
+                </CardHeader>
+                <CardFooter className="pt-2">
+                    <Button 
+                        onClick={requestPermission} 
+                        className="bg-white text-blue-700 hover:bg-blue-50 font-black px-8 py-6 rounded-2xl shadow-lg transition-all active:scale-95 text-xs uppercase tracking-widest"
+                    >
+                        Enable Notifications
+                    </Button>
+                </CardFooter>
+            </Card>
+        </div>
+    );
+};
 
 // Child Switcher Component for persistent navigation
 const ChildSwitcher = ({ children, activeId, onSelect, onBackToOverview }: { 
@@ -137,6 +169,9 @@ function DashboardContent() {
     const { auth, db, storage } = useFirebase();
     const urlId = searchParams.get('id');
     const schoolId = searchParams.get('schoolId');
+    
+    // Initialize FCM Notifications
+    const { permission, requestPermission } = useFCM(urlId, schoolId);
     
     // Edit Profile State
     const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -404,29 +439,24 @@ function DashboardContent() {
         const dynamicFeedingCat = allFeeCategories.find(c => c.isDaily && (c.name.toLowerCase().trim() === 'feeding fee' || c.name.toLowerCase().trim() === 'feeding'));
         const dynamicFeedingId = dynamicFeedingCat?.id.toLowerCase().trim();
 
+        const discount = Number(studentData.feeDiscount) || 0;
+        const discountFactor = 1 - (discount / 100);
+
         let dailyFeeEstimate = 0;
         let dailyAccrued = 0;
         const daysPresent = (studentData.attendance || []).filter(a => a.attended && (!selectedPeriodId || a.periodId === selectedPeriodId)).length;
 
-        // 1. Process Feeding Fee specifically using studentData.dailyFeedingCost (Canonical Source)
-        dailyFeeEstimate += (Number(studentData.dailyFeedingCost) || 0) * termDays;
-        dailyAccrued += (Number(studentData.dailyFeedingCost) || 0) * daysPresent;
-
-        // 2. Process other dynamic daily fee categories using the official category list
-        // This matches Admin deduplication logic
-        allFeeCategories.filter(c => c.isDaily).forEach(cat => {
-            const normName = cat.name.toLowerCase().trim();
-            const normId = cat.id.toLowerCase().trim();
+        // Unified Daily Fee Calculation
+        feeCategories.filter(c => c.isDaily).forEach(cat => {
+            const normId = cat.id;
             
-            // Skip if it's a variant of the main feeding fee (already processed)
-            if (normName === 'feeding fee' || normName === 'feeding' || normId === 'feeding' || (dynamicFeedingId && normId === dynamicFeedingId)) return;
-
             const studentRate = (studentData.dailyFees || []).find(f => 
-                (f.categoryId && f.categoryId.toLowerCase().trim() === normId)
+                f.categoryId === normId
             )?.rate || 0;
 
-            dailyFeeEstimate += Number(studentRate) * termDays;
-            dailyAccrued += Number(studentRate) * daysPresent;
+            const rateWithDiscount = Number(studentRate) * discountFactor;
+            dailyFeeEstimate += rateWithDiscount * termDays;
+            dailyAccrued += rateWithDiscount * daysPresent;
         });
 
         const mainFeesBalance = mainData.balance;
@@ -625,22 +655,14 @@ function DashboardContent() {
 
                 // Daily Accrued based on attendance
                 const daysPresent = (student.attendance || []).filter(a => a.attended && (!selectedPeriodId || a.periodId === selectedPeriodId)).length;
-                const feedingRate = Number(student.dailyFeedingCost) || 0;
                 
-                const dynamicFeedingCat = feeCategories.find(c => c.isDaily && (c.name.toLowerCase().trim() === 'feeding fee' || c.name.toLowerCase().trim() === 'feeding'));
-                const dynamicFeedingId = dynamicFeedingCat?.id.toLowerCase().trim();
-
-                let otherDailyRates = 0;
+                let totalDailyRate = 0;
                 feeCategories.filter(c => c.isDaily).forEach(cat => {
-                    const normName = cat.name.toLowerCase().trim();
-                    const normId = cat.id.toLowerCase().trim();
-                    if (normName === 'feeding fee' || normName === 'feeding' || normId === 'feeding' || (dynamicFeedingId && normId === dynamicFeedingId)) return;
-
-                    const rate = (student.dailyFees || []).find(f => f.categoryId && f.categoryId.toLowerCase().trim() === normId)?.rate || 0;
-                    otherDailyRates += Number(rate);
+                    const rate = (student.dailyFees || []).find(f => f.categoryId === cat.id)?.rate || 0;
+                    totalDailyRate += Number(rate);
                 });
 
-                const dailyAccrued = (feedingRate + otherDailyRates) * daysPresent;
+                const dailyAccrued = totalDailyRate * daysPresent;
                 return mainBalance + dailyAccrued;
             };
 
@@ -665,6 +687,7 @@ function DashboardContent() {
                     schoolLogoUrl={schoolDetails?.logoUrl}
                 />
                 <main className="container mx-auto px-4 py-8 pb-24 md:pb-8">
+                    <NotificationPrompt permission={permission} requestPermission={requestPermission} />
                     <Tabs value={familyActiveTab} onValueChange={(val: any) => setFamilyActiveTab(val)} className="w-full">
                         <TabsList className="grid w-full grid-cols-3 h-auto mb-8 bg-white/50 backdrop-blur-sm p-1 rounded-2xl border border-white/20">
                             <TabsTrigger value="overview" className="rounded-xl py-3 font-bold text-xs data-[state=active]:bg-primary data-[state=active]:text-white transition-all">Family Overview</TabsTrigger>
@@ -959,6 +982,7 @@ function DashboardContent() {
             schoolLogoUrl={schoolDetails?.logoUrl}
         />
         <main className="container mx-auto px-4 py-8 pb-24 md:pb-8">
+            <NotificationPrompt permission={permission} requestPermission={requestPermission} />
             {isFamilyView && (
                 <Button variant="ghost" className="mb-4 text-primary hover:text-primary/80" onClick={() => { setActiveStudentId(null); setStudentData(null); }}>
                     ← Back to Family List
@@ -973,6 +997,7 @@ function DashboardContent() {
                     onRefresh={() => fetchStudentData(studentData.studentId)}
                     isRefreshing={isRefreshing}
                     onEdit={openEditProfile}
+                    feeDiscount={studentData.feeDiscount}
                 />
             </div>
 
@@ -1101,6 +1126,7 @@ function DashboardContent() {
                                     selectedPeriodId={selectedPeriodId} 
                                     feeCategories={feeCategories}
                                     schoolId={schoolId || undefined}
+                                    feeDiscount={studentData.feeDiscount}
                                 />
                             </section>
 

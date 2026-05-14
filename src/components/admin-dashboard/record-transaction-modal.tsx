@@ -65,6 +65,8 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
         periodId: selectedPeriodId || ''
     });
 
+    const [wasDiscountApplied, setWasDiscountApplied] = useState(false);
+
     useEffect(() => {
         if (isOpen) {
             if (transactionToEdit) {
@@ -77,6 +79,7 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
                     periodId: transactionToEdit.periodId || ''
                 });
             } else {
+                setWasDiscountApplied(false);
                 setForm(prev => ({
                     ...prev,
                     type: initialType,
@@ -96,12 +99,15 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
             const amountValue = parseFloat(form.amount);
             const selectedCategory = feeCategories.find(c => c.id === form.category);
             const categoryName = selectedCategory ? selectedCategory.name : form.category;
-
+            const finalDescription = wasDiscountApplied 
+                ? `${categoryName || 'Fee'} (${student.feeDiscount}% Discount)`
+                : (categoryName || 'Transaction');
+                
             const transactionData: any = {
                 date: form.date,
                 category: categoryName, // Store the human-readable name
                 categoryId: selectedCategory?.id || form.category, // Store the strict ID reference
-                description: categoryName || 'Transaction',
+                description: finalDescription,
                 debit: form.type === 'fee' ? amountValue : 0,
                 credit: form.type === 'payment' ? amountValue : 0,
                 periodId: form.periodId || undefined
@@ -208,7 +214,7 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
                                 required 
                                 className="h-12 border-primary/20 shadow-sm bg-muted/30 text-numeric text-lg font-black"
                             />
-                            {form.type === 'fee' && (student.feeDiscount || 0) > 0 && !feeCategories.find(c => c.id === form.category)?.isDaily && (
+                            {form.type === 'fee' && (student.feeDiscount || 0) > 0 && (
                                 <div className="mt-2 p-2 bg-primary/5 rounded-lg border border-primary/20 flex items-center justify-between animate-in fade-in slide-in-from-top-1 duration-300">
                                     <div className="flex flex-col">
                                         <span className="text-[10px] text-primary font-black uppercase tracking-tighter">Discount Available</span>
@@ -221,6 +227,7 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
                                             const base = Number(form.amount) || 0;
                                             const discounted = base * (1 - ((student.feeDiscount || 0) / 100));
                                             setForm({...form, amount: discounted.toFixed(2)});
+                                            setWasDiscountApplied(true);
                                             toast({ title: "Discount Applied", description: `${student.feeDiscount}% discount applied.` });
                                         }}
                                         className="h-7 text-[10px] font-black bg-primary text-white"

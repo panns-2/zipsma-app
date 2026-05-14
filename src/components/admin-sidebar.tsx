@@ -49,7 +49,7 @@ export function AdminSidebar({
   ];
 
   return (
-    <aside className={`w-[280px] flex-shrink-0 flex-col p-4 border-r border-[#04386c]/20 bg-[#04386c] text-primary-foreground ${isMobile ? 'flex h-full' : 'hidden lg:flex sticky top-0 h-screen'}`}>
+    <aside className={`w-[280px] flex-shrink-0 flex-col p-4 border-r border-[#00205c]/20 bg-[#00205c] text-primary-foreground ${isMobile ? 'flex h-full' : 'hidden lg:flex sticky top-0 h-screen'}`}>
         <div className="flex items-center gap-4 px-2 py-4 mb-6 relative">
             {logoUrl ? (
                 <Avatar className="h-12 w-12 border-2 border-white/20 shadow-sm">

@@ -96,6 +96,7 @@ export interface Student {
     profilePicture: string;
     schoolId: string;
     isArchived: boolean;
+    muteReminders?: boolean;
 
     // Personal Details
     dateOfBirth: string;
@@ -113,27 +114,19 @@ export interface Student {
     // Medical
     medicalNotes: string;
 
-    // Financial Info (DEPRECATED - Use ledger instead)
-    /** @deprecated Use ledger array */
-    generalFees: FeeItem[];
-    /** @deprecated Use ledger array */
-    generalPayments: PaymentItem[];
-    /** @deprecated Use ledger array */
-    dailyFeedingCost: number;
-    /** @deprecated Use ledger array */
-    feedingFeePayments: PaymentItem[];
-    /** @deprecated Use ledger array */
-    transportationCost: number;
-    /** @deprecated Use ledger array */
-    transportationPayments: PaymentItem[];
-    /** @deprecated Use ledger array */
-    dailyFees?: { categoryId: string; rate: number }[];
-    
     // Academic
     attendance: AttendanceRecord[];
     currentPeriodId?: string;
     ledger?: LedgerTransaction[];
     feeDiscount?: number; // Percentage discount (0-100)
+    dailyFees?: { categoryId: string; rate: number }[];
+}
+
+export interface InstallmentStage {
+    id: string;
+    percentage: number;
+    deadlineType: 'Week' | 'Date';
+    deadlineValue: string;
 }
 
 export interface AcademicPeriod {
@@ -146,6 +139,7 @@ export interface AcademicPeriod {
     endDate: string;
     vacationDate?: string;
     nextTermBegins?: string;
+    installmentPlan?: InstallmentStage[];
 }
 export interface Announcement {
     id: string;
@@ -230,11 +224,12 @@ export interface School {
     momoNumber?: string;
     momoName?: string;
     bankAccounts?: BankAccount[];
+    hubtelSmsClientId?: string;
+    hubtelSmsClientSecret?: string;
+    hubtelSenderId?: string;
+    hubtelPaymentClientId?: string;
+    hubtelPaymentClientSecret?: string;
     hubtelMerchantNumber?: string;
-    hubtelClientId?: string;
-    hubtelClientSecret?: string;
-    sendexaApiToken?: string;
-    sendexaSenderId?: string;
     currentPeriodId?: string;
     settingsPin?: string;
 }
@@ -571,7 +566,7 @@ export async function getStaffById(db: Firestore, schoolId: string, staffId: str
   return null;
 }
 
-export async function addStudent(db: Firestore, auth: Auth, schoolId: string, newStudentData: Omit<Student, 'dateAdded' | 'profilePicture' | 'generalFees' | 'generalPayments' | 'dailyFeedingCost' | 'feedingFeePayments' | 'attendance' | 'transportationCost' | 'transportationPayments' | 'isArchived' | 'dailyFees' | 'ledger'> & { dailyFees?: { categoryId: string, rate: number }[] }) {
+export async function addStudent(db: Firestore, auth: Auth, schoolId: string, newStudentData: Omit<Student, 'dateAdded' | 'profilePicture' | 'attendance' | 'isArchived' | 'dailyFees' | 'ledger'> & { dailyFees?: { categoryId: string, rate: number }[] }) {
     if (!schoolId) throw new Error("School ID missing.");
     const { studentId, ...restOfData } = newStudentData;
 
@@ -592,13 +587,6 @@ export async function addStudent(db: Firestore, auth: Auth, schoolId: string, ne
         attendance: [],
         dailyFees: restOfData.dailyFees || [],
         ledger: [],
-        // Legacy fields initialized as empty for backward compatibility if needed
-        generalFees: [],
-        generalPayments: [],
-        dailyFeedingCost: 0,
-        feedingFeePayments: [],
-        transportationCost: 0,
-        transportationPayments: [],
     };
     
     await setDoc(studentDocRef, newStudentForFirestore).catch(async (serverError) => {
@@ -797,185 +785,6 @@ export async function updateStudentDetails(db: Firestore, storage: FirebaseStora
     });
 }
 
-export async function updateGeneralFees(db: Firestore, auth: Auth, studentId: string, fees: FeeItem[], schoolId?: string) {
-  await ensureUserAuthenticated(auth);
-  const studentDocRef = getStudentDocRef(db, studentId, schoolId);
-  await updateDoc(studentDocRef, { generalFees: fees }).catch(async (serverError) => {
-    const permissionError = new FirestorePermissionError({
-        path: studentDocRef.path,
-        operation: 'update',
-        requestResourceData: { generalFees: fees },
-    });
-    errorEmitter.emit('permission-error', permissionError);
-    throw permissionError;
-  });
-}
-
-export async function addGeneralPayment(db: Firestore, auth: Auth, studentId: string, payment: Omit<PaymentItem, 'id'>, schoolId?: string) {
-  await ensureUserAuthenticated(auth);
-  const studentDocRef = getStudentDocRef(db, studentId, schoolId);
-  const studentSnap = await getDoc(studentDocRef);
-  const student = studentSnap.data() as Student | undefined;
-
-  if (student) {
-    const newPayment = { ...payment, id: Date.now() };
-    const updatedPayments = [...(student.generalPayments || []), newPayment];
-    await updateDoc(studentDocRef, { generalPayments: updatedPayments }).catch(async (serverError) => {
-        const permissionError = new FirestorePermissionError({
-            path: studentDocRef.path,
-            operation: 'update',
-            requestResourceData: { generalPayments: updatedPayments },
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        throw permissionError;
-    });
-  }
-}
-
-export async function deleteGeneralPayment(db: Firestore, auth: Auth, studentId: string, paymentId: number, schoolId?: string) {
-  await ensureUserAuthenticated(auth);
-  const studentDocRef = getStudentDocRef(db, studentId, schoolId);
-  const studentSnap = await getDoc(studentDocRef);
-  const student = studentSnap.data() as Student | undefined;
-
-  if (student) {
-    const updatedPayments = student.generalPayments.filter(p => p.id !== paymentId);
-    await updateDoc(studentDocRef, { generalPayments: updatedPayments }).catch(async (serverError) => {
-        const permissionError = new FirestorePermissionError({
-            path: studentDocRef.path,
-            operation: 'update',
-            requestResourceData: { generalPayments: updatedPayments },
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        throw permissionError;
-    });
-  }
-}
-
-export async function updateDailyCost(db: Firestore, auth: Auth, studentId: string, cost: number, schoolId?: string) {
-  await ensureUserAuthenticated(auth);
-  let studentDocRef = getStudentDocRef(db, studentId, schoolId);
-  let studentSnap = await getDoc(studentDocRef);
-  
-  if (!studentSnap.exists() && schoolId && !studentId.includes('_')) {
-      const legacyDocRef = doc(db, studentsCollection, studentId.toUpperCase());
-      const legacySnap = await getDoc(legacyDocRef);
-      if (legacySnap.exists() && legacySnap.data()?.schoolId === schoolId.toUpperCase()) {
-          studentDocRef = legacyDocRef;
-          studentSnap = legacySnap;
-      }
-  }
-
-  const existingSchoolId = studentSnap.exists() ? studentSnap.data()?.schoolId : null;
-  
-  const updateData: any = { dailyFeedingCost: cost };
-  const resolvedSchoolId = existingSchoolId || schoolId;
-  if (resolvedSchoolId) {
-      updateData.schoolId = resolvedSchoolId;
-  }
-  
-  await updateDoc(studentDocRef, updateData).catch(async (serverError) => {
-    const permissionError = new FirestorePermissionError({
-        path: studentDocRef.path,
-        operation: 'update',
-        requestResourceData: updateData,
-    });
-    errorEmitter.emit('permission-error', permissionError);
-    throw permissionError;
-  });
-}
-
-export async function addFeedingPayment(db: Firestore, auth: Auth, studentId: string, payment: Omit<PaymentItem, 'id'>, schoolId?: string) {
-    await ensureUserAuthenticated(auth);
-    const studentDocRef = getStudentDocRef(db, studentId, schoolId);
-    const studentSnap = await getDoc(studentDocRef);
-    const student = studentSnap.data() as Student | undefined;
-    if (student) {
-      const newPayment = { ...payment, id: Date.now() };
-      const updatedPayments = [...(student.feedingFeePayments || []), newPayment];
-      await updateDoc(studentDocRef, { feedingFeePayments: updatedPayments }).catch(async (serverError) => {
-        const permissionError = new FirestorePermissionError({
-            path: studentDocRef.path,
-            operation: 'update',
-            requestResourceData: { feedingFeePayments: updatedPayments },
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        throw permissionError;
-      });
-    }
-}
-
-export async function deleteFeedingPayment(db: Firestore, auth: Auth, studentId: string, paymentId: number, schoolId?: string) {
-  await ensureUserAuthenticated(auth);
-  const studentDocRef = getStudentDocRef(db, studentId, schoolId);
-  const studentSnap = await getDoc(studentDocRef);
-  const student = studentSnap.data() as Student | undefined;
-  if (student) {
-    const updatedPayments = student.feedingFeePayments.filter(p => p.id !== paymentId);
-    await updateDoc(studentDocRef, { feedingFeePayments: updatedPayments }).catch(async (serverError) => {
-        const permissionError = new FirestorePermissionError({
-            path: studentDocRef.path,
-            operation: 'update',
-            requestResourceData: { feedingFeePayments: updatedPayments },
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        throw permissionError;
-    });
-  }
-}
-
-export async function updateTransportationCost(db: Firestore, auth: Auth, studentId: string, cost: number, schoolId?: string) {
-  await ensureUserAuthenticated(auth);
-  const studentDocRef = getStudentDocRef(db, studentId, schoolId);
-  await updateDoc(studentDocRef, { transportationCost: cost }).catch(async (serverError) => {
-    const permissionError = new FirestorePermissionError({
-        path: studentDocRef.path,
-        operation: 'update',
-        requestResourceData: { transportationCost: cost },
-    });
-    errorEmitter.emit('permission-error', permissionError);
-    throw permissionError;
-  });
-}
-
-export async function addTransportationPayment(db: Firestore, auth: Auth, studentId: string, payment: Omit<PaymentItem, 'id'>, schoolId?: string) {
-    await ensureUserAuthenticated(auth);
-    const studentDocRef = getStudentDocRef(db, studentId, schoolId);
-    const studentSnap = await getDoc(studentDocRef);
-    const student = studentSnap.data() as Student | undefined;
-    if (student) {
-      const newPayment = { ...payment, id: Date.now() };
-      const updatedPayments = [...(student.transportationPayments || []), newPayment];
-      await updateDoc(studentDocRef, { transportationPayments: updatedPayments }).catch(async (serverError) => {
-        const permissionError = new FirestorePermissionError({
-            path: studentDocRef.path,
-            operation: 'update',
-            requestResourceData: { transportationPayments: updatedPayments },
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        throw permissionError;
-      });
-    }
-}
-
-export async function deleteTransportationPayment(db: Firestore, auth: Auth, studentId: string, paymentId: number, schoolId?: string) {
-  await ensureUserAuthenticated(auth);
-  const studentDocRef = getStudentDocRef(db, studentId, schoolId);
-  const studentSnap = await getDoc(studentDocRef);
-  const student = studentSnap.data() as Student | undefined;
-  if (student) {
-    const updatedPayments = (student.transportationPayments || []).filter(p => p.id !== paymentId);
-    await updateDoc(studentDocRef, { transportationPayments: updatedPayments }).catch(async (serverError) => {
-        const permissionError = new FirestorePermissionError({
-            path: studentDocRef.path,
-            operation: 'update',
-            requestResourceData: { transportationPayments: updatedPayments },
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        throw permissionError;
-    });
-  }
-}
 
 export async function setAttendance(db: Firestore, auth: Auth, studentId: string, date: string, attended: boolean, periodId?: string, schoolId?: string) {
     let user: User | null = null;
@@ -1105,163 +914,7 @@ function safeDateString(dateInput: any): string {
     }
 }
 
-export async function migrateToLedger(db: Firestore, auth: Auth, studentId: string, schoolId?: string) {
-    const user = await ensureUserAuthenticated(auth);
-    const studentDocRef = getStudentDocRef(db, studentId, schoolId);
-    const studentSnap = await getDoc(studentDocRef);
-    const student = studentSnap.data() as Student | undefined;
 
-    if (!student) return;
-
-    const ledger: LedgerTransaction[] = [...(student.ledger || [])];
-
-    // Helper to check if a transaction already exists in ledger to avoid duplicates
-    const transactionExists = (idPrefix: string, originalId: any) => 
-        ledger.some(t => t.id === `${idPrefix}-${originalId}`);
-
-    // Migrate General Fees
-    (student.generalFees || []).forEach(f => {
-        const migrationId = `mig-gf-${f.id}`;
-        if (ledger.some(t => t.id === migrationId)) return;
-        
-        const entry: LedgerTransaction = {
-            id: migrationId,
-            date: safeDateString(student.dateAdded),
-            type: 'fee',
-            category: 'general',
-            description: f.item || 'General Fee',
-            debit: Number(f.amount || 0),
-            credit: 0,
-            recordedBy: user.uid,
-        };
-        if (f.periodId) entry.periodId = f.periodId;
-        ledger.push(entry);
-    });
-
-    // Migrate General Payments
-    (student.generalPayments || []).forEach(p => {
-        const migrationId = `mig-gp-${p.id}`;
-        if (ledger.some(t => t.id === migrationId)) return;
-
-        const entry: LedgerTransaction = {
-            id: migrationId,
-            date: safeDateString(p.date),
-            type: 'payment',
-            category: 'general',
-            description: p.notes || 'Payment Received',
-            debit: 0,
-            credit: Number(p.amount || 0),
-            recordedBy: user.uid,
-        };
-        if (p.periodId) entry.periodId = p.periodId;
-        ledger.push(entry);
-    });
-
-    // Migrate Feeding Payments
-    (student.feedingFeePayments || []).forEach(p => {
-        const migrationId = `mig-ffp-${p.id}`;
-        if (ledger.some(t => t.id === migrationId)) return;
-
-        const entry: LedgerTransaction = {
-            id: migrationId,
-            date: safeDateString(p.date),
-            type: 'payment',
-            category: 'feeding',
-            description: p.notes || 'Feeding Payment',
-            debit: 0,
-            credit: Number(p.amount || 0),
-            recordedBy: user.uid,
-        };
-        if (p.periodId) entry.periodId = p.periodId;
-        ledger.push(entry);
-    });
-
-    // Migrate Transportation
-    if (student.transportationCost && Number(student.transportationCost) > 0) {
-        const migrationId = `mig-tc-${studentId}`;
-        if (!ledger.some(t => t.id === migrationId)) {
-            ledger.push({
-                id: migrationId,
-                date: safeDateString(student.dateAdded),
-                type: 'fee',
-                category: 'transportation',
-                description: 'Transportation Fee',
-                debit: Number(student.transportationCost),
-                credit: 0,
-                recordedBy: user.uid
-            });
-        }
-    }
-
-    (student.transportationPayments || []).forEach(p => {
-        const migrationId = `mig-tp-${p.id}`;
-        if (ledger.some(t => t.id === migrationId)) return;
-
-        const entry: LedgerTransaction = {
-            id: migrationId,
-            date: safeDateString(p.date),
-            type: 'payment',
-            category: 'transportation',
-            description: p.notes || 'Transportation Payment',
-            debit: 0,
-            credit: Number(p.amount || 0),
-            recordedBy: user.uid,
-        };
-        if (p.periodId) entry.periodId = p.periodId;
-        ledger.push(entry);
-    });
-
-    // Migrate Feeding Accruals
-    if (student.dailyFeedingCost && Number(student.dailyFeedingCost) > 0) {
-        const attendedDays = (student.attendance || []).filter(a => a.attended).length;
-        if (attendedDays > 0) {
-            const migrationId = `mig-fa-${studentId}`;
-            if (!ledger.some(t => t.id === migrationId)) {
-                ledger.push({
-                    id: migrationId,
-                    date: safeDateString(student.dateAdded),
-                    type: 'fee',
-                    category: 'feeding',
-                    description: 'Feeding Fees (Historical Accrual)',
-                    debit: Number(student.dailyFeedingCost) * attendedDays,
-                    credit: 0,
-                    recordedBy: user.uid
-                });
-            }
-        }
-    }
-
-    // Migrate Custom Daily Fees
-    if (student.dailyFees && (student.dailyFees || []).length > 0) {
-        // No longer writing individual daily fee transactions to the ledger to keep it clean.
-        // Balances will be calculated dynamically from attendance data in the UI.
-    }
-
-    // Sort by date
-    ledger.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-    // Update student with new ledger AND clear old silos
-    const updates: any = {
-        ledger,
-        generalFees: [],
-        generalPayments: [],
-        feedingFeePayments: [],
-        transportationPayments: [],
-        dailyFeedingCost: 0,
-        transportationCost: 0,
-        dailyFees: []
-    };
-
-    await updateDoc(studentDocRef, updates).catch(async (serverError) => {
-        const permissionError = new FirestorePermissionError({
-            path: studentDocRef.path,
-            operation: 'update',
-            requestResourceData: { ledger },
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        throw permissionError;
-    });
-}
 
 /**
  * Utility to identify if a transaction belongs to the Daily Fee ledger.
@@ -1296,6 +949,82 @@ export function isDailyTransaction(t: LedgerTransaction, categories: FeeCategory
     }
     
     return false;
+}
+
+export function calculateInstallmentExpectedAmount(
+    student: Student,
+    period: AcademicPeriod,
+    categories: FeeCategory[],
+    currentDateStr: string = new Date().toISOString().split('T')[0]
+): number {
+    if (!student.ledger) return 0;
+
+    const mainLedger = student.ledger.filter(t => 
+        !t.isVoided && 
+        (!t.periodId || t.periodId === period.id) && 
+        !isDailyTransaction(t, categories)
+    );
+
+    const totalTermFees = mainLedger.reduce((sum, t) => sum + (t.debit || 0), 0);
+
+    if (!period.installmentPlan || period.installmentPlan.length === 0) {
+        return totalTermFees;
+    }
+
+    let expectedPercentage = 0;
+    const periodStartDate = new Date(period.startDate);
+    const currentDate = new Date(currentDateStr);
+    
+    const daysSinceStart = Math.floor((currentDate.getTime() - periodStartDate.getTime()) / (1000 * 60 * 60 * 24));
+    const currentWeekNumber = Math.max(1, Math.ceil(daysSinceStart / 7));
+
+    for (const stage of period.installmentPlan) {
+        let isPastDeadline = false;
+        
+        if (stage.deadlineType === 'Week') {
+            const stageWeek = parseInt(stage.deadlineValue.replace('Week ', '')) || 1;
+            if (currentWeekNumber >= stageWeek) {
+                isPastDeadline = true;
+            }
+        } else if (stage.deadlineType === 'Date') {
+            const stageDate = new Date(stage.deadlineValue);
+            if (currentDate >= stageDate) {
+                isPastDeadline = true;
+            }
+        }
+
+        if (isPastDeadline) {
+            expectedPercentage += stage.percentage;
+        }
+    }
+
+    expectedPercentage = Math.min(100, expectedPercentage);
+    return (totalTermFees * expectedPercentage) / 100;
+}
+
+export function calculateInstallmentOutstandingBalance(
+    student: Student,
+    period: AcademicPeriod,
+    categories: FeeCategory[],
+    currentDateStr?: string
+): { expectedAmount: number, actualPaid: number, outstandingBalance: number } {
+    const expectedAmount = calculateInstallmentExpectedAmount(student, period, categories, currentDateStr);
+
+    if (!student.ledger) return { expectedAmount, actualPaid: 0, outstandingBalance: expectedAmount };
+
+    const mainLedger = student.ledger.filter(t => 
+        !t.isVoided && 
+        (!t.periodId || t.periodId === period.id) && 
+        !isDailyTransaction(t, categories)
+    );
+
+    const actualPaid = mainLedger.reduce((sum, t) => sum + (t.credit || 0), 0);
+
+    return {
+        expectedAmount,
+        actualPaid,
+        outstandingBalance: Math.max(0, expectedAmount - actualPaid)
+    };
 }
 
 export async function postLedgerTransaction(db: Firestore, auth: Auth, idOrStudentId: string, transaction: Omit<LedgerTransaction, 'id' | 'recordedBy'> & { categoryId?: string }, schoolId?: string) {
@@ -1365,7 +1094,7 @@ export async function postBulkClassLedgerTransaction(db: Firestore, auth: Auth, 
         const baseDebit = isDailyFee 
             ? (student.dailyFees?.find((df: any) => df.categoryId === lookupCategoryId)?.rate || transaction.debit || 0)
             : (transaction.debit || 0);
-        const discountToApply = (applyDiscounts && !isDailyFee) ? discount : 0;
+        const discountToApply = applyDiscounts ? discount : 0;
         const finalDebit = discountToApply > 0 ? baseDebit * (1 - discountToApply / 100) : baseDebit;
         const finalDescription = (discountToApply > 0 && transaction.type === 'fee')
             ? `${transaction.description} (${discountToApply}% Discount)`
@@ -1604,13 +1333,7 @@ export async function resetSchoolFinancials(db: Firestore, auth: Auth, schoolId:
                 : getStudentDocRef(db, student.studentId, schoolId);
             batch.update(studentDocRef, {
                 ledger: [],
-                generalFees: [],
-                generalPayments: [],
-                feedingFeePayments: [],
-                transportationPayments: [],
-                attendance: [],
-                dailyFeedingCost: 0,
-                transportationCost: 0
+                attendance: []
             });
         });
         
@@ -2291,8 +2014,11 @@ export async function registerSchool(auth: Auth, db: Firestore, storage: Firebas
         momoName: '',
         bankAccounts: [],
         hubtelMerchantNumber: '',
-        hubtelClientId: '',
-        hubtelClientSecret: '',
+        hubtelSmsClientId: '',
+        hubtelSmsClientSecret: '',
+        hubtelPaymentClientId: '',
+        hubtelPaymentClientSecret: '',
+        hubtelSenderId: '',
     };
 
     // 5. Set the school document in Firestore (without the logo URL first)

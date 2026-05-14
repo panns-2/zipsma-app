@@ -9,6 +9,7 @@ export interface FirebaseServices {
     auth: Auth;
     db: Firestore;
     storage: FirebaseStorage;
+    messaging?: any; // Only on client
 }
 
 let firebaseInstance: FirebaseServices | null = null;
@@ -30,6 +31,17 @@ export function initializeFirebase(firebaseConfig: FirebaseOptions): FirebaseSer
     const db = getFirestore(app);
     const storage = getStorage(app);
 
-    firebaseInstance = { app, auth, db, storage };
+    let messaging;
+    if (typeof window !== 'undefined') {
+        const { getMessaging, isSupported } = require('firebase/messaging');
+        isSupported().then((supported: boolean) => {
+            if (supported) {
+                messaging = getMessaging(app);
+                if (firebaseInstance) firebaseInstance.messaging = messaging;
+            }
+        }).catch(console.error);
+    }
+
+    firebaseInstance = { app, auth, db, storage, messaging };
     return firebaseInstance;
 }
