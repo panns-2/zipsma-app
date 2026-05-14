@@ -200,33 +200,65 @@ export async function GET(request: Request) {
             const actualPaid = mainLedger.reduce((sum: number, t: any) => sum + (t.credit || 0), 0);
             
             let expectedPercentage = 100; // Default to 100%
+            let currentDeadlineDate = "the current period";
+            
+            const periodStartDate = periodData.startDate ? new Date(periodData.startDate) : new Date();
+            const currentDate = new Date();
+            const daysSinceStart = Math.floor((currentDate.getTime() - periodStartDate.getTime()) / (1000 * 60 * 60 * 24));
+            const currentWeekNumber = Math.max(1, Math.ceil(daysSinceStart / 7));
+
             if (periodData.installmentPlan && periodData.installmentPlan.length > 0) {
                 expectedPercentage = 0;
-                const periodStartDate = new Date(periodData.startDate);
-                const currentDate = new Date();
-                const daysSinceStart = Math.floor((currentDate.getTime() - periodStartDate.getTime()) / (1000 * 60 * 60 * 24));
-                const currentWeekNumber = Math.max(1, Math.ceil(daysSinceStart / 7));
+                let latestDeadlineDate: Date | null = null;
 
                 for (const stage of periodData.installmentPlan) {
                     let isPastDeadline = false;
+                    let stageDeadlineDate: Date;
+
                     if (stage.deadlineType === 'Week') {
                         const stageWeek = parseInt((stage.deadlineValue || '').replace('Week ', '')) || 1;
+                        stageDeadlineDate = new Date(periodStartDate);
+                        stageDeadlineDate.setDate(stageDeadlineDate.getDate() + (stageWeek * 7));
                         if (currentWeekNumber >= stageWeek) isPastDeadline = true;
-                    } else if (stage.deadlineType === 'Date') {
-                        const stageDate = new Date(stage.deadlineValue);
-                        if (currentDate >= stageDate) isPastDeadline = true;
+                    } else {
+                        stageDeadlineDate = new Date(stage.deadlineValue);
+                        if (currentDate >= stageDeadlineDate) isPastDeadline = true;
                     }
-                    if (isPastDeadline) expectedPercentage += stage.percentage;
+
+                    if (isPastDeadline) {
+                        expectedPercentage += stage.percentage;
+                        if (!latestDeadlineDate || stageDeadlineDate > latestDeadlineDate) {
+                            latestDeadlineDate = stageDeadlineDate;
+                        }
+                    }
+                }
+                
+                if (latestDeadlineDate) {
+                    const day = latestDeadlineDate.getDate();
+                    const month = latestDeadlineDate.toLocaleDateString('en-GB', { month: 'long' });
+                    const year = latestDeadlineDate.getFullYear();
+                    
+                    const getOrdinal = (n: number) => {
+                        const s = ["th", "st", "nd", "rd"];
+                        const v = n % 100;
+                        return n + (s[(v - 20) % 10] || s[v] || s[0]);
+                    };
+
+                    currentDeadlineDate = `${getOrdinal(day)} ${month} ${year}`;
                 }
                 expectedPercentage = Math.min(100, expectedPercentage);
             }
 
+            const totalOutstanding = Math.max(0, totalTermFees - actualPaid);
             const expectedAmount = (totalTermFees * expectedPercentage) / 100;
             const outstandingBalance = Math.max(0, expectedAmount - actualPaid);
 
             if (outstandingBalance > 0) {
                 const message = settings.message
                     .replace(/{balance}/g, `GHS ${outstandingBalance.toFixed(2)}`)
+                    .replace(/{total_balance}/g, `GHS ${totalOutstanding.toFixed(2)}`)
+                    .replace(/{week}/g, `Week ${currentWeekNumber}`)
+                    .replace(/{date}/g, currentDeadlineDate)
                     .replace(/{name}/g, studentData.name || "your ward");
                 const clientId = schoolData.hubtelSmsClientId?.trim();
                 const clientSecret = schoolData.hubtelSmsClientSecret?.trim();

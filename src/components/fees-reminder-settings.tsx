@@ -16,6 +16,16 @@ import { doc, getDoc, setDoc, collection, query, where, orderBy, limit, getDocs 
 import { Calendar, CheckCircle2, XCircle, Play, Info, Smartphone } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const defaultMessage = `Dear Parent, this is a friendly reminder that {name}'s outstanding balance is {balance}. Please make a payment to avoid any inconvenience. Thank you`;
 
@@ -33,6 +43,7 @@ export function FeesReminderSettings({ schoolId }: { schoolId: string }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
     const [recentLogs, setRecentLogs] = useState<any[]>([]);
+    const [showConfirmRealSms, setShowConfirmRealSms] = useState(false);
 
     useEffect(() => {
         const fetchSettings = async () => {
@@ -254,7 +265,7 @@ export function FeesReminderSettings({ schoolId }: { schoolId: string }) {
                                         <div className="flex items-center gap-2 mt-2">
                                             <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
                                             <Info className="w-3 h-3" />
-                                            Use <code className="bg-slate-100 px-1 rounded">{`{name}`}</code> for student name and <code className="bg-slate-100 px-1 rounded">{`{balance}`}</code> for the amount.
+                                            Use <code className="bg-slate-100 px-1 rounded">{`{name}`}</code> for student name, <code className="bg-slate-100 px-1 rounded">{`{week}`}</code> for current week, <code className="bg-slate-100 px-1 rounded">{`{date}`}</code> for the installment deadline, <code className="bg-slate-100 px-1 rounded">{`{balance}`}</code> for amount due now, and <code className="bg-slate-100 px-1 rounded">{`{total_balance}`}</code> for full balance.
                                         </p>
                                         </div>
                                     </div>
@@ -270,20 +281,36 @@ export function FeesReminderSettings({ schoolId }: { schoolId: string }) {
                                             {isTesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
                                             Simulate Test (Dry Run)
                                         </Button>
-                                        <Button 
-                                            type="button" 
-                                            variant="secondary" 
-                                            className="flex-1"
-                                            onClick={() => {
-                                                if (confirm("This will send ACTUAL SMS messages to all parents with outstanding balances. Are you sure?")) {
-                                                    handleTriggerTest(false);
-                                                }
-                                            }}
-                                            disabled={isTesting || isSubmitting}
-                                        >
-                                            {isTesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Smartphone className="mr-2 h-4 w-4" />}
-                                            Send Real Test SMS
-                                        </Button>
+                                        
+                                        <AlertDialog open={showConfirmRealSms} onOpenChange={setShowConfirmRealSms}>
+                                            <Button 
+                                                type="button" 
+                                                variant="secondary" 
+                                                className="flex-1"
+                                                onClick={() => setShowConfirmRealSms(true)}
+                                                disabled={isTesting || isSubmitting}
+                                            >
+                                                {isTesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Smartphone className="mr-2 h-4 w-4" />}
+                                                Send Real Test SMS
+                                            </Button>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Send Real SMS Reminders?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        This will send ACTUAL SMS messages to all parents with outstanding balances. This action will incur costs on your Hubtel account.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => {
+                                                        console.log("Real SMS confirmation accepted");
+                                                        handleTriggerTest(false);
+                                                    }}>
+                                                        Proceed & Send
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
                                     </div>
                                 </div>
                             )}
