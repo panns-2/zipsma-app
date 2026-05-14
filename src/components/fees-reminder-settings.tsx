@@ -146,7 +146,7 @@ export function FeesReminderSettings({ schoolId }: { schoolId: string }) {
         try {
             // Use the placeholder secret for local/dev verification.
             // In production, this should be handled more securely.
-            const secret = 'super-secret-key-placeholder';
+            const secret = 'CRON_SECRET';
             
             const response = await fetch(`/api/cron?test=true&dryRun=${dryRun}&schoolId=${schoolId}`, {
                 method: 'GET',
