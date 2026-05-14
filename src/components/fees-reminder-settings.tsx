@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { useFirebase } from '@/firebase/client-provider';
@@ -34,8 +35,7 @@ export function FeesReminderSettings({ schoolId }: { schoolId: string }) {
     const { toast } = useToast();
     
     const [isEnabled, setIsEnabled] = useState(false);
-    const [frequency, setFrequency] = useState('daily');
-    const [day, setDay] = useState('monday');
+    const [selectedDays, setSelectedDays] = useState<string[]>(['monday']);
     const [time, setTime] = useState('09:00');
     const [customMessage, setCustomMessage] = useState(defaultMessage);
     
@@ -61,8 +61,16 @@ export function FeesReminderSettings({ schoolId }: { schoolId: string }) {
                 if (docSnap.exists()) {
                     const settings = docSnap.data();
                     setIsEnabled(settings.isEnabled || false);
-                    setFrequency(settings.frequency || 'daily');
-                    setDay(settings.day || 'monday');
+                    // Migrate from old frequency/day to new selectedDays array
+                    if (settings.selectedDays) {
+                        setSelectedDays(settings.selectedDays);
+                    } else if (settings.frequency === 'daily') {
+                        setSelectedDays(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
+                    } else if (settings.day) {
+                        setSelectedDays([settings.day]);
+                    } else {
+                        setSelectedDays(['monday']);
+                    }
                     setTime(settings.time || '09:00');
                     setCustomMessage(settings.message || defaultMessage);
                 } else {
@@ -116,8 +124,7 @@ export function FeesReminderSettings({ schoolId }: { schoolId: string }) {
         try {
             const settingsToSave = {
                 isEnabled,
-                frequency,
-                day,
+                selectedDays,
                 time,
                 message: customMessage,
             };
@@ -210,45 +217,47 @@ export function FeesReminderSettings({ schoolId }: { schoolId: string }) {
 
                             {isEnabled && (
                                 <div className="space-y-4 pt-4 border-t">
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <div>
-                                            <Label htmlFor="reminder-frequency">Frequency</Label>
-                                            <Select value={frequency} onValueChange={setFrequency} disabled={isSubmitting}>
-                                                <SelectTrigger id="reminder-frequency"><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="daily">Daily</SelectItem>
-                                                    <SelectItem value="weekly">Weekly</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                    <div className="space-y-3">
+                                        <Label className="text-base">Days to Send Reminders</Label>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 p-4 border rounded-lg bg-background">
+                                            {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => (
+                                                <div key={day} className="flex items-center space-x-2">
+                                                    <Checkbox 
+                                                        id={`day-${day}`} 
+                                                        checked={selectedDays.includes(day)}
+                                                        onCheckedChange={(checked) => {
+                                                            if (checked) {
+                                                                setSelectedDays([...selectedDays, day]);
+                                                            } else {
+                                                                setSelectedDays(selectedDays.filter(d => d !== day));
+                                                            }
+                                                        }}
+                                                    />
+                                                    <Label 
+                                                        htmlFor={`day-${day}`}
+                                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 capitalize"
+                                                    >
+                                                        {day.substring(0, 3)}
+                                                    </Label>
+                                                </div>
+                                            ))}
                                         </div>
-                                        
-                                        {frequency === 'weekly' && (
-                                            <div>
-                                                <Label htmlFor="reminder-day">Day of the Week</Label>
-                                                <Select value={day} onValueChange={setDay} disabled={isSubmitting}>
-                                                    <SelectTrigger id="reminder-day"><SelectValue /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="monday">Monday</SelectItem>
-                                                        <SelectItem value="tuesday">Tuesday</SelectItem>
-                                                        <SelectItem value="wednesday">Wednesday</SelectItem>
-                                                        <SelectItem value="thursday">Thursday</SelectItem>
-                                                        <SelectItem value="friday">Friday</SelectItem>
-                                                        <SelectItem value="saturday">Saturday</SelectItem>
-                                                        <SelectItem value="sunday">Sunday</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        )}
+                                    </div>
 
-                                        <div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-2">
                                             <Label htmlFor="reminder-time">Time of Day (24-hour)</Label>
                                             <Input 
                                                 id="reminder-time"
                                                 type="time"
                                                 value={time}
                                                 onChange={(e) => setTime(e.target.value)}
+                                                className="w-full"
                                                 disabled={isSubmitting}
                                             />
+                                            <p className="text-[10px] text-muted-foreground italic">
+                                                Tip: You can change this time as often as needed.
+                                            </p>
                                         </div>
                                     </div>
 

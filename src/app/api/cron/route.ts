@@ -7,12 +7,18 @@ const isTimeToSend = (settings: any) => {
     console.log("CRON: Checking if it's time to send messages...");
 
     if (!settings.time) {
-        console.log("CRON: No time is set in settings. Sending immediately.");
-        return true; // If no time is set, send for backward compatibility.
+        console.log("CRON: No time is set in settings. Skipping.");
+        return false;
     }
 
-    // Vercel serverless functions run in UTC. Accra time (GMT) is equivalent to UTC.
+    // Check if it has already run today
     const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    if (settings.lastRunDate === todayStr) {
+        console.log(`CRON: Reminders already sent today (${todayStr}). Skipping.`);
+        return false;
+    }
+
     const weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
     const currentDay = weekdays[now.getUTCDay()];
     const currentHour = now.getUTCHours();
@@ -22,33 +28,26 @@ const isTimeToSend = (settings: any) => {
 
     console.log(`CRON: Current UTC time: ${now.toISOString()}`);
     console.log(`CRON: Current day: ${currentDay}, Current hour: ${currentHour}, Current minute: ${currentMinute}`);
-    console.log(`CRON: Scheduled frequency: ${settings.frequency}, Day: ${settings.day}, Time: ${settings.time}`);
+    console.log(`CRON: Scheduled Days: ${JSON.stringify(settings.selectedDays)}, Time: ${settings.time}`);
 
-    // Check if the current time is within a 5-minute window of the scheduled time to account for minor delays.
-    const isTimeMatch = currentHour === scheduledHour && Math.abs(currentMinute - scheduledMinute) < 5;
-
-    if (!isTimeMatch) {
-        console.log("CRON: Time does not match. Skipping.");
+    // 1. Check if today is a selected day
+    const isSelectedDay = settings.selectedDays && settings.selectedDays.includes(currentDay);
+    if (!isSelectedDay) {
+        console.log(`CRON: Today '${currentDay}' is not a selected day. Skipping.`);
         return false;
     }
 
-    if (settings.frequency === 'daily') {
-        console.log("CRON: Frequency is daily and time matches. Proceeding to send.");
-        return true;
+    // 2. Check if the current time is within a 15-minute window of the scheduled time.
+    // (Matching the 15-minute cron heartbeat frequency)
+    const isTimeMatch = currentHour === scheduledHour && Math.abs(currentMinute - scheduledMinute) < 15;
+
+    if (!isTimeMatch) {
+        console.log("CRON: Time does not match window. Skipping.");
+        return false;
     }
 
-    if (settings.frequency === 'weekly') {
-        if (currentDay === settings.day) {
-            console.log("CRON: Frequency is weekly, day and time match. Proceeding to send.");
-            return true;
-        } else {
-            console.log(`CRON: Frequency is weekly, but current day '${currentDay}' does not match scheduled day '${settings.day}'. Skipping.`);
-            return false;
-        }
-    }
-    
-    console.log("CRON: No valid frequency matched. Skipping.");
-    return false;
+    console.log("CRON: Day and Time match! Proceeding to send.");
+    return true;
 };
 
 export async function GET(request: Request) {
@@ -351,6 +350,14 @@ export async function GET(request: Request) {
         } // closes for loop of students
       
       executionLogs.push(schoolLog);
+      
+      // Update lastRunDate for the school if any messages were attempted in a scheduled run
+      if (!isManualTrigger && schoolLog.attempted > 0) {
+          await db.collection('schools').doc(schoolId).collection('settings').doc('feeReminders').set({
+              lastRunDate: new Date().toISOString().split('T')[0]
+          }, { merge: true });
+      }
+
       } // closes for loop of schools
 
       // --- Log the execution to Firestore ---
