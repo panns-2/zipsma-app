@@ -3,20 +3,26 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { sendNotificationToUser } from '@/lib/notification-utils';
 
 // --- More Reliable Helper function to check the schedule ---
-const isTimeToSend = (settings: any) => {
-    console.log("CRON: Checking if it's time to send messages...");
+const isTimeToSend = (settings: any, schoolId: string) => {
+    console.log(`CRON: [${schoolId}] Checking schedule...`);
 
-    if (!settings.time) {
-        console.log("CRON: No time is set in settings. Skipping.");
-        return false;
+    if (!settings.isEnabled) {
+        console.log(`CRON: [${schoolId}] Reminders are disabled.`);
+        return { shouldSend: false, reason: 'Disabled' };
     }
 
-    // Check if it has already run today
+    if (!settings.time) {
+        console.log(`CRON: [${schoolId}] No time set.`);
+        return { shouldSend: false, reason: 'No time set' };
+    }
+
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
+    
+    // 1. Check if it has already run today
     if (settings.lastRunDate === todayStr) {
-        console.log(`CRON: Reminders already sent today (${todayStr}). Skipping.`);
-        return false;
+        console.log(`CRON: [${schoolId}] Already sent today (${todayStr}).`);
+        return { shouldSend: false, reason: 'Already sent today' };
     }
 
     const weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -26,36 +32,39 @@ const isTimeToSend = (settings: any) => {
     
     const [scheduledHour, scheduledMinute] = settings.time.split(':').map(Number);
 
-    console.log(`CRON: Current UTC time: ${now.toISOString()}`);
-    console.log(`CRON: Current day: ${currentDay}, Current hour: ${currentHour}, Current minute: ${currentMinute}`);
-    console.log(`CRON: Scheduled Days: ${JSON.stringify(settings.selectedDays)}, Time: ${settings.time}`);
+    console.log(`CRON: [${schoolId}] UTC Now: ${currentHour}:${currentMinute}, Scheduled: ${settings.time} on ${JSON.stringify(settings.selectedDays)}`);
 
-    // 1. Check if today is a selected day
+    // 2. Check if today is a selected day
     const isSelectedDay = settings.selectedDays && settings.selectedDays.includes(currentDay);
     if (!isSelectedDay) {
-        console.log(`CRON: Today '${currentDay}' is not a selected day. Skipping.`);
-        return false;
+        console.log(`CRON: [${schoolId}] Today (${currentDay}) is not a selected day.`);
+        return { shouldSend: false, reason: `Not a selected day (${currentDay})` };
     }
 
-    // 2. Check if the current time is exactly the scheduled time (within a 1-minute window).
-    const isTimeMatch = currentHour === scheduledHour && Math.abs(currentMinute - scheduledMinute) < 1;
+    // 3. Check if we are at or after the scheduled time
+    // We use a "at or after" check because exact minute matching is too fragile for external pingers.
+    // The lastRunDate check above ensures we only run once per day.
+    const nowInMinutes = currentHour * 60 + currentMinute;
+    const scheduledInMinutes = scheduledHour * 60 + scheduledMinute;
+    
+    const isTimeReached = nowInMinutes >= scheduledInMinutes;
 
-    if (!isTimeMatch) {
-        console.log("CRON: Time does not match window. Skipping.");
-        return false;
+    if (!isTimeReached) {
+        console.log(`CRON: [${schoolId}] Scheduled time (${settings.time}) not reached yet.`);
+        return { shouldSend: false, reason: `Time not reached (${settings.time} UTC)` };
     }
 
-    console.log("CRON: Day and Time match! Proceeding to send.");
-    return true;
+    console.log(`CRON: [${schoolId}] Schedule match!`);
+    return { shouldSend: true };
 };
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const dryRun = searchParams.get('dryRun') === 'true';
     const testSchoolId = searchParams.get('schoolId')?.toUpperCase();
-    const isManualTrigger = searchParams.get('test') === 'true' || !!testSchoolId;
+    const isManualTrigger = searchParams.get('manual') === 'true' || searchParams.get('test') === 'true' || !!testSchoolId;
 
-    console.log(`CRON: Fee reminder job started at: ${new Date().toISOString()} (DryRun: ${dryRun}, Manual: ${isManualTrigger})`);
+    console.log(`CRON: Job started. DryRun: ${dryRun}, Manual: ${isManualTrigger}, School: ${testSchoolId || 'All'}`);
     const cronSecret = request.headers.get('x-cron-secret');
     const expectedSecret = process.env.CRON_SECRET || 'super-secret-key-placeholder';
   
@@ -116,6 +125,7 @@ export async function GET(request: Request) {
       let schoolsProcessed = 0;
       let errors: string[] = [];
       const executionLogs: any[] = [];
+      const skippedSchools: any[] = [];
   
       for (const schoolDoc of schoolsSnapshot.docs) {
         const schoolId = schoolDoc.id;
@@ -127,14 +137,13 @@ export async function GET(request: Request) {
         const settingsDoc = await db.collection('schools').doc(schoolId).collection('settings').doc('feeReminders').get();
         const settings = settingsDoc.data();
         
-        if (!settings || !settings.isEnabled) {
-          console.log(`CRON: Fee reminders are disabled for school ${schoolId}. Skipping.`);
-          continue;
-        }
-
-        if (!isManualTrigger && !isTimeToSend(settings)) {
-          console.log(`CRON: Skipping school ${schoolId}. Not its scheduled time.`);
-          continue;
+        if (!isManualTrigger) {
+          const { shouldSend, reason } = isTimeToSend(settings || {}, schoolId);
+          if (!shouldSend) {
+            console.log(`CRON: Skipping school ${schoolId}. Reason: ${reason}`);
+            skippedSchools.push({ schoolId, reason });
+            continue;
+          }
         }
 
         console.log(`CRON: Processing school ${schoolId}. Fetching current period and fee categories.`);
@@ -366,10 +375,10 @@ export async function GET(request: Request) {
       executionLogs.push(schoolLog);
       
       // Update lastRunDate for the school if any messages were attempted in a scheduled run
-      // We only update lastRunDate if it was NOT a dry run. 
-      // Manual tests (test=true) that are NOT dry runs will also update the date to prevent duplicate automated runs.
-      if (schoolLog.attempted > 0 && !dryRun) {
-          console.log(`CRON: Updating lastRunDate for school ${schoolId} to prevent duplicate runs today.`);
+      // We only update lastRunDate if it was NOT a dry run and NOT a manual test.
+      // This allows users to test as much as they want without blocking the automated run today.
+      if (schoolLog.attempted > 0 && !dryRun && !isManualTrigger) {
+          console.log(`CRON: Updating lastRunDate for school ${schoolId} to prevent duplicate automated runs today.`);
           await db.collection('schools').doc(schoolId).collection('settings').doc('feeReminders').set({
               lastRunDate: new Date().toISOString().split('T')[0]
           }, { merge: true });
@@ -387,6 +396,7 @@ export async function GET(request: Request) {
           totalSent: totalMessagesSent,
           totalFailed: totalMessagesFailed,
           schoolLogs: executionLogs,
+          skippedSchools,
           errors: errors.length > 0 ? errors : null
       };
       

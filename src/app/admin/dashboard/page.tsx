@@ -211,6 +211,11 @@ function AdminDashboard() {
     const [feesActiveSubTab, setFeesActiveSubTab] = useState<'main' | 'daily'>('main');
     const [selectedDailyCategoryForPayments, setSelectedDailyCategoryForPayments] = useState<string>('feeding');
     const [selectedPaymentDate, setSelectedPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
+
+    // Clear selection when the date changes to prevent accidental bulk payments on the wrong date
+    useEffect(() => {
+        setBulkDailyPaymentsSelection({});
+    }, [selectedPaymentDate]);
     const [bulkDailyPaymentsSelection, setBulkDailyPaymentsSelection] = useState<Record<string, boolean>>({});
 
     const [addStudentForm, setAddStudentForm] = useState(defaultAddStudentForm);
@@ -3089,14 +3094,35 @@ function AdminDashboard() {
                                                             <TableRow>
                                                                 <TableHead className="w-[50px] pl-6">
                                                                     <Checkbox 
-                                                                        checked={dailyFeeSummary.length > 0 && dailyFeeSummary.every(row => bulkDailyPaymentsSelection[`${row.studentId}|${row.categoryId}`])}
-                                                                        onCheckedChange={(checked) => {
-                                                                            const newSelection = { ...bulkDailyPaymentsSelection };
-                                                                            dailyFeeSummary.forEach(row => {
-                                                                                newSelection[`${row.studentId}|${row.categoryId}`] = !!checked;
+                                                                        checked={(() => {
+                                                                            const selectableRows = dailyFeeSummary.filter(row => {
+                                                                                const student = students.find(s => s.studentId === row.studentId);
+                                                                                return !student?.ledger?.some(t => 
+                                                                                    !t.isVoided && 
+                                                                                    t.date === selectedPaymentDate && 
+                                                                                    (t.categoryId === row.categoryId || t.category === row.categoryId || t.category === row.categoryName) &&
+                                                                                    (t.credit || 0) > 0
+                                                                                );
                                                                             });
-                                                                            setBulkDailyPaymentsSelection(newSelection);
-                                                                        }}
+                                                                            return selectableRows.length > 0 && selectableRows.every(row => bulkDailyPaymentsSelection[`${row.studentId}|${row.categoryId}`]);
+                                                                        })()}
+                                                                            onCheckedChange={(checked) => {
+                                                                                const newSelection = { ...bulkDailyPaymentsSelection };
+                                                                                dailyFeeSummary.forEach(row => {
+                                                                                    const student = students.find(s => s.studentId === row.studentId);
+                                                                                    const isAlreadyPaid = student?.ledger?.some(t => 
+                                                                                        !t.isVoided && 
+                                                                                        t.date === selectedPaymentDate && 
+                                                                                        (t.categoryId === row.categoryId || t.category === row.categoryId || t.category === row.categoryName) &&
+                                                                                        (t.credit || 0) > 0
+                                                                                    );
+
+                                                                                    if (!isAlreadyPaid) {
+                                                                                        newSelection[`${row.studentId}|${row.categoryId}`] = !!checked;
+                                                                                    }
+                                                                                });
+                                                                                setBulkDailyPaymentsSelection(newSelection);
+                                                                            }}
                                                                         className="border-primary/30 data-[state=checked]:bg-primary"
                                                                     />
                                                                 </TableHead>
@@ -3115,16 +3141,47 @@ function AdminDashboard() {
                                                                     return (
                                                                         <TableRow key={`${row.studentName}-${row.categoryName}-${idx}`} className={cn("hover:bg-primary/5 transition-all duration-200 border-primary/5 h-20", isSelected && "bg-primary/[0.04] shadow-inner")}>
                                                                             <TableCell className="pl-6">
-                                                                                <Checkbox 
-                                                                                    checked={isSelected}
-                                                                                    onCheckedChange={(checked) => {
-                                                                                        setBulkDailyPaymentsSelection(prev => ({
-                                                                                            ...prev,
-                                                                                            [selectionKey]: !!checked
-                                                                                        }));
-                                                                                    }}
-                                                                                    className="border-primary/30 data-[state=checked]:bg-primary"
-                                                                                />
+                                                                                {(() => {
+                                                                                    const student = students.find(s => s.studentId === row.studentId);
+                                                                                    const isAlreadyPaid = student?.ledger?.some(t => 
+                                                                                        !t.isVoided && 
+                                                                                        t.date === selectedPaymentDate && 
+                                                                                        (t.categoryId === row.categoryId || t.category === row.categoryId || t.category === row.categoryName) &&
+                                                                                        (t.credit || 0) > 0
+                                                                                    );
+
+                                                                                    return (
+                                                                                        <TooltipProvider>
+                                                                                            <Tooltip>
+                                                                                                <TooltipTrigger asChild>
+                                                                                                    <div className="flex items-center justify-center">
+                                                                                                        <Checkbox 
+                                                                                                            checked={isSelected || isAlreadyPaid}
+                                                                                                            disabled={isAlreadyPaid}
+                                                                                                            onCheckedChange={(checked) => {
+                                                                                                                setBulkDailyPaymentsSelection(prev => ({
+                                                                                                                    ...prev,
+                                                                                                                    [selectionKey]: !!checked
+                                                                                                                }));
+                                                                                                            }}
+                                                                                                            className={cn(
+                                                                                                                "border-primary/30 data-[state=checked]:bg-primary transition-opacity",
+                                                                                                                isAlreadyPaid && "opacity-50 cursor-not-allowed"
+                                                                                                            )}
+                                                                                                        />
+                                                                                                    </div>
+                                                                                                </TooltipTrigger>
+                                                                                                {isAlreadyPaid && (
+                                                                                                    <TooltipContent side="right" className="bg-emerald-600 text-white font-bold border-none shadow-lg">
+                                                                                                        <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider">
+                                                                                                            <CheckCheck className="w-3 h-3" /> Paid for {new Date(selectedPaymentDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                                                                                                        </p>
+                                                                                                    </TooltipContent>
+                                                                                                )}
+                                                                                            </Tooltip>
+                                                                                        </TooltipProvider>
+                                                                                    );
+                                                                                })()}
                                                                             </TableCell>
                                                                             <TableCell className="font-bold text-sm whitespace-nowrap">
                                                                                 <div className="flex items-center gap-3">
