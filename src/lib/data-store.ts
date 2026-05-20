@@ -1141,15 +1141,15 @@ export async function postBulkDailyPayments(db: Firestore, auth: Auth, schoolId:
     const batch = writeBatch(db);
     const timestamp = Date.now();
 
+    // Map studentId to their accumulated transactions to avoid overwriting state
+    const updatedLedgersByStudent = new Map<string, LedgerTransaction[]>();
+
     payments.forEach((payment, index) => {
         const student = students.find(s => s.studentId === payment.studentId);
         if (!student) return;
 
-        // Use student.id if available (actual Firestore document ID), otherwise fallback to getStudentDocRef
-        const studentDocRef = student.id 
-            ? doc(db, studentsCollection, student.id) 
-            : getStudentDocRef(db, student.studentId, schoolId);
-        
+        const currentLedger = updatedLedgersByStudent.get(student.studentId) || student.ledger || [];
+
         const newTransaction: LedgerTransaction = {
             id: `${timestamp}-${index}`,
             date: safeDateString(payment.date),
@@ -1168,11 +1168,22 @@ export async function postBulkDailyPayments(db: Firestore, auth: Auth, schoolId:
             if ((newTransaction as any)[key] === undefined) delete (newTransaction as any)[key];
         });
 
-        const updatedLedger = [...(student.ledger || []), newTransaction];
-        updatedLedger.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const newLedger = [...currentLedger, newTransaction];
+        updatedLedgersByStudent.set(student.studentId, newLedger);
+    });
+
+    updatedLedgersByStudent.forEach((ledger, studentId) => {
+        const student = students.find(s => s.studentId === studentId);
+        if (!student) return;
+
+        const studentDocRef = student.id 
+            ? doc(db, studentsCollection, student.id) 
+            : getStudentDocRef(db, student.studentId, schoolId);
+
+        ledger.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
         batch.update(studentDocRef, { 
-            ledger: updatedLedger,
+            ledger: ledger,
             ...(student.schoolId ? { schoolId: student.schoolId } : (schoolId ? { schoolId: schoolId.toUpperCase() } : {}))
         });
     });

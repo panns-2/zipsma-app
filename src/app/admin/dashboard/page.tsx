@@ -462,14 +462,16 @@ function AdminDashboard() {
                 setStudents(activeStudents);
                 setArchivedStudents(allStudents.filter(s => s.isArchived));
                 
-                if (activeStudents.length > 0) {
-                    const stillExists = activeStudents.some(s => s.studentId === selectedStudentId);
-                    if (!selectedStudentId || !stillExists) {
-                        setSelectedStudentId(activeStudents[0].studentId);
+                setSelectedStudentId(prevSelectedId => {
+                    if (activeStudents.length > 0) {
+                        const stillExists = activeStudents.some(s => s.studentId === prevSelectedId);
+                        if (prevSelectedId && stillExists) {
+                            return prevSelectedId;
+                        }
+                        return activeStudents[0].studentId;
                     }
-                } else {
-                    setSelectedStudentId(null);
-                }
+                    return null;
+                });
             }
 
             if (allStaff) {
@@ -3097,12 +3099,14 @@ function AdminDashboard() {
                                                                         checked={(() => {
                                                                             const selectableRows = dailyFeeSummary.filter(row => {
                                                                                 const student = students.find(s => s.studentId === row.studentId);
-                                                                                return !student?.ledger?.some(t => 
+                                                                                const isAlreadyPaid = student?.ledger?.some(t => 
                                                                                     !t.isVoided && 
                                                                                     t.date === selectedPaymentDate && 
                                                                                     (t.categoryId === row.categoryId || t.category === row.categoryId || t.category === row.categoryName) &&
                                                                                     (t.credit || 0) > 0
                                                                                 );
+                                                                                const isPresent = student?.attendance?.some(a => a.date === selectedPaymentDate && a.attended);
+                                                                                return !isAlreadyPaid && isPresent;
                                                                             });
                                                                             return selectableRows.length > 0 && selectableRows.every(row => bulkDailyPaymentsSelection[`${row.studentId}|${row.categoryId}`]);
                                                                         })()}
@@ -3116,8 +3120,9 @@ function AdminDashboard() {
                                                                                         (t.categoryId === row.categoryId || t.category === row.categoryId || t.category === row.categoryName) &&
                                                                                         (t.credit || 0) > 0
                                                                                     );
+                                                                                    const isPresent = student?.attendance?.some(a => a.date === selectedPaymentDate && a.attended);
 
-                                                                                    if (!isAlreadyPaid) {
+                                                                                    if (!isAlreadyPaid && isPresent) {
                                                                                         newSelection[`${row.studentId}|${row.categoryId}`] = !!checked;
                                                                                     }
                                                                                 });
@@ -3149,6 +3154,8 @@ function AdminDashboard() {
                                                                                         (t.categoryId === row.categoryId || t.category === row.categoryId || t.category === row.categoryName) &&
                                                                                         (t.credit || 0) > 0
                                                                                     );
+                                                                                    const isPresent = student?.attendance?.some(a => a.date === selectedPaymentDate && a.attended);
+                                                                                    const isDisabled = isAlreadyPaid || !isPresent;
 
                                                                                     return (
                                                                                         <TooltipProvider>
@@ -3157,7 +3164,7 @@ function AdminDashboard() {
                                                                                                     <div className="flex items-center justify-center">
                                                                                                         <Checkbox 
                                                                                                             checked={isSelected || isAlreadyPaid}
-                                                                                                            disabled={isAlreadyPaid}
+                                                                                                            disabled={isDisabled}
                                                                                                             onCheckedChange={(checked) => {
                                                                                                                 setBulkDailyPaymentsSelection(prev => ({
                                                                                                                     ...prev,
@@ -3166,18 +3173,24 @@ function AdminDashboard() {
                                                                                                             }}
                                                                                                             className={cn(
                                                                                                                 "border-primary/30 data-[state=checked]:bg-primary transition-opacity",
-                                                                                                                isAlreadyPaid && "opacity-50 cursor-not-allowed"
+                                                                                                                isDisabled && "opacity-50 cursor-not-allowed"
                                                                                                             )}
                                                                                                         />
                                                                                                     </div>
                                                                                                 </TooltipTrigger>
-                                                                                                {isAlreadyPaid && (
+                                                                                                {isAlreadyPaid ? (
                                                                                                     <TooltipContent side="right" className="bg-emerald-600 text-white font-bold border-none shadow-lg">
                                                                                                         <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider">
                                                                                                             <CheckCheck className="w-3 h-3" /> Paid for {new Date(selectedPaymentDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                                                                                                         </p>
                                                                                                     </TooltipContent>
-                                                                                                )}
+                                                                                                ) : !isPresent ? (
+                                                                                                    <TooltipContent side="right" className="bg-amber-600 text-white font-bold border-none shadow-lg">
+                                                                                                        <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider">
+                                                                                                            <XCircle className="w-3 h-3" /> Not present on {new Date(selectedPaymentDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                                                                                                        </p>
+                                                                                                    </TooltipContent>
+                                                                                                ) : null}
                                                                                             </Tooltip>
                                                                                         </TooltipProvider>
                                                                                     );

@@ -137,8 +137,14 @@ export async function GET(request: Request) {
         const settingsDoc = await db.collection('schools').doc(schoolId).collection('settings').doc('feeReminders').get();
         const settings = settingsDoc.data();
         
+        if (!settings) {
+          console.log(`CRON: Skipping school ${schoolId}. Reason: No reminder settings found.`);
+          skippedSchools.push({ schoolId, reason: 'No settings' });
+          continue;
+        }
+
         if (!isManualTrigger) {
-          const { shouldSend, reason } = isTimeToSend(settings || {}, schoolId);
+          const { shouldSend, reason } = isTimeToSend(settings, schoolId);
           if (!shouldSend) {
             console.log(`CRON: Skipping school ${schoolId}. Reason: ${reason}`);
             skippedSchools.push({ schoolId, reason });
@@ -276,7 +282,7 @@ export async function GET(request: Request) {
             const outstandingBalance = Math.max(0, expectedAmount - actualPaid);
 
             if (outstandingBalance > 0) {
-                const message = settings.message
+            const message = (settings.message || "Your ward's fee balance is {balance}. Please make payment as soon as possible.")
                     .replace(/{balance}/g, `GHS ${outstandingBalance.toFixed(2)}`)
                     .replace(/{total_balance}/g, `GHS ${totalOutstanding.toFixed(2)}`)
                     .replace(/{week}/g, `Week ${currentWeekNumber}`)

@@ -59,7 +59,7 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
     
     const [form, setForm] = useState({
         type: initialType as 'fee' | 'payment' | 'adjustment',
-        category: 'General',
+        category: initialType === 'payment' ? 'fees_payment' : 'General',
         amount: '',
         date: new Date().toISOString().split('T')[0],
         periodId: selectedPeriodId || ''
@@ -70,10 +70,11 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
     useEffect(() => {
         if (isOpen) {
             if (transactionToEdit) {
-                const resolvedCategory = feeCategories.find(c => c.id === transactionToEdit.category || c.name === transactionToEdit.category);
+                const resolvedCategory = feeCategories.find(c => c.id === transactionToEdit.categoryId || c.id === transactionToEdit.category || c.name === transactionToEdit.category);
+                const isPayment = transactionToEdit.type === 'payment' || transactionToEdit.credit > 0 || (transactionToEdit.debit === 0 && transactionToEdit.credit === 0 && transactionToEdit.category?.toLowerCase().includes('payment'));
                 setForm({
-                    type: transactionToEdit.debit > 0 ? 'fee' : 'payment',
-                    category: resolvedCategory ? resolvedCategory.id : (transactionToEdit.category as string || 'General'),
+                    type: isPayment ? 'payment' : (transactionToEdit.debit > 0 ? 'fee' : 'adjustment'),
+                    category: resolvedCategory ? resolvedCategory.id : (transactionToEdit.categoryId || (isPayment ? 'fees_payment' : (transactionToEdit.category as string || 'General'))),
                     amount: (transactionToEdit.debit || transactionToEdit.credit).toString(),
                     date: transactionToEdit.date,
                     periodId: transactionToEdit.periodId || ''
@@ -84,11 +85,11 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
                     ...prev,
                     type: initialType,
                     periodId: selectedPeriodId || prev.periodId || (academicPeriods[0]?.id || ''),
-                    category: initialCategoryId || (filteredCategories.length > 0 ? filteredCategories[0].id : 'General')
+                    category: initialType === 'payment' ? 'fees_payment' : (initialCategoryId || (filteredCategories.length > 0 ? filteredCategories[0].id : 'General'))
                 }));
             }
         }
-    }, [isOpen, initialType, selectedPeriodId, academicPeriods, transactionToEdit, filteredCategories]);
+    }, [isOpen, initialType, selectedPeriodId, academicPeriods, transactionToEdit, filteredCategories, initialCategoryId]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -98,15 +99,34 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
         try {
             const amountValue = parseFloat(form.amount);
             const selectedCategory = feeCategories.find(c => c.id === form.category);
-            const categoryName = selectedCategory ? selectedCategory.name : form.category;
-            const finalDescription = wasDiscountApplied 
-                ? `${categoryName || 'Fee'} (${student.feeDiscount}% Discount)`
-                : (categoryName || 'Transaction');
+            let categoryName = '';
+            let categoryId = '';
+            let finalDescription = '';
+
+            if (form.type === 'payment') {
+                if (form.category === 'fees_payment') {
+                    categoryName = 'Fees Payment';
+                    categoryId = 'fees_payment';
+                    finalDescription = 'Fees Payment';
+                } else {
+                    const selectedCategory = feeCategories.find(c => c.id === form.category);
+                    categoryName = selectedCategory ? selectedCategory.name : form.category;
+                    categoryId = selectedCategory?.id || form.category;
+                    finalDescription = `${categoryName} Payment`;
+                }
+            } else {
+                const selectedCategory = feeCategories.find(c => c.id === form.category);
+                categoryName = selectedCategory ? selectedCategory.name : form.category;
+                categoryId = selectedCategory?.id || form.category;
+                finalDescription = wasDiscountApplied 
+                    ? `${categoryName || 'Fee'} (${student.feeDiscount}% Discount)`
+                    : (categoryName || 'Transaction');
+            }
                 
             const transactionData: any = {
                 date: form.date,
                 category: categoryName, // Store the human-readable name
-                categoryId: selectedCategory?.id || form.category, // Store the strict ID reference
+                categoryId: categoryId, // Store the strict ID reference
                 description: finalDescription,
                 debit: form.type === 'fee' ? amountValue : 0,
                 credit: form.type === 'payment' ? amountValue : 0,
@@ -171,7 +191,13 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Type</Label>
-                            <Select value={form.type} onValueChange={(val: any) => setForm({...form, type: val})}>
+                            <Select value={form.type} onValueChange={(val: any) => {
+                                setForm({
+                                    ...form,
+                                    type: val,
+                                    category: val === 'payment' ? 'fees_payment' : (filteredCategories.length > 0 ? filteredCategories[0].id : 'General')
+                                });
+                            }}>
                                 <SelectTrigger className="h-12 border-primary/20 focus:ring-primary shadow-sm bg-muted/30">
                                     <SelectValue />
                                 </SelectTrigger>
@@ -184,19 +210,35 @@ export const RecordTransactionModal: React.FC<RecordTransactionModalProps> = ({
                         </div>
                         <div className="space-y-2">
                             <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Category</Label>
-                            <Select value={form.category} onValueChange={(val: any) => setForm({...form, category: val})}>
+                            <Select 
+                                value={form.category} 
+                                onValueChange={(val: any) => setForm({...form, category: val})}
+                            >
                                 <SelectTrigger className="h-12 border-primary/20 focus:ring-primary shadow-sm bg-muted/30">
                                     <SelectValue placeholder="Select Category" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {filteredCategories.length === 0 ? (
-                                        <SelectItem value="none" disabled>No categories found</SelectItem>
-                                    ) : (
-                                        filteredCategories.map(cat => (
-                                            <SelectItem key={cat.id} value={cat.id} className="font-bold">
-                                                {cat.name} {cat.isDaily ? '(Daily)' : ''}
+                                    {form.type === 'payment' ? (
+                                        <>
+                                            <SelectItem value="fees_payment" className="font-bold text-emerald-600">
+                                                Fees Payment (General)
                                             </SelectItem>
-                                        ))
+                                            {filteredCategories.map(cat => (
+                                                <SelectItem key={cat.id} value={cat.id} className="font-bold text-emerald-600">
+                                                    {cat.name} Payment {cat.isDaily ? '(Daily)' : ''}
+                                                </SelectItem>
+                                            ))}
+                                        </>
+                                    ) : (
+                                        filteredCategories.length === 0 ? (
+                                            <SelectItem value="none" disabled>No categories found</SelectItem>
+                                        ) : (
+                                            filteredCategories.map(cat => (
+                                                <SelectItem key={cat.id} value={cat.id} className="font-bold">
+                                                    {cat.name} {cat.isDaily ? '(Daily)' : ''}
+                                                </SelectItem>
+                                            ))
+                                        )
                                     )}
                                 </SelectContent>
                             </Select>
